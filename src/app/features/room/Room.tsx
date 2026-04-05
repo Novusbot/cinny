@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
 import { Box, Line } from 'folds';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { isKeyHotkey } from 'is-hotkey';
 import { useAtomValue } from 'jotai';
 import { RoomView } from './RoomView';
@@ -18,11 +18,14 @@ import { CallView } from '../call/CallView';
 import { RoomViewHeader } from './RoomViewHeader';
 import { callChatAtom } from '../../state/callEmbed';
 import { CallChatView } from './CallChatView';
+import { getHomePath } from '../../pages/pathUtils';
+import { useMacNavigation } from '../../hooks/useMacNavigation';
 
 export function Room() {
   const { eventId } = useParams();
   const room = useRoom();
   const mx = useMatrixClient();
+  const navigate = useNavigate();
 
   const [isDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
@@ -31,15 +34,19 @@ export function Room() {
   const members = useRoomMembers(mx, room.roomId);
   const chat = useAtomValue(callChatAtom);
 
+  // macOS native navigation: swipe + Escape to go home
+  useMacNavigation();
+
   useKeyDown(
     window,
     useCallback(
       (evt) => {
         if (isKeyHotkey('escape', evt)) {
           markAsRead(mx, room.roomId, hideActivity);
+          navigate(getHomePath(), { replace: false });
         }
       },
-      [mx, room.roomId, hideActivity]
+      [mx, room.roomId, hideActivity, navigate]
     )
   );
 
