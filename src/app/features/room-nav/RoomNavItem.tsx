@@ -267,7 +267,7 @@ export function RoomNavItem({
   const roomName = useRoomName(room);
   const isDirect = useIsDirectRoom();
   const myUserId = mx.getUserId();
-  const lastMessage = useRoomLastMessage(room, isDirect, myUserId);
+  const lastMessage = useRoomLastMessage(room, isDirect, myUserId, mx, useAuthentication);
 
   const handleContextMenu: MouseEventHandler<HTMLElement> = (evt) => {
     evt.preventDefault();
@@ -385,24 +385,106 @@ export function RoomNavItem({
                     overflow: 'hidden',
                     whiteSpace: 'normal',
                     wordBreak: 'break-word',
-                    color: 'gray',
-                    fontSize: '0.8rem',
+                    fontSize: '0.8125rem',
                     lineHeight: 1.25,
                     marginTop: '2px',
                     width: '100%',
                   }}
                 >
-                  {lastMessage.senderPrefix && (
+                  {lastMessage.senderPrefix === 'Вы: ' ? (
+                    <>
+                      <span
+                        style={{
+                          fontSize: '0.8125rem',
+                          fontWeight: 500,
+                          color: 'var(--text-primary)',
+                          marginRight: '4px',
+                        }}
+                      >
+                        Вы:
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '0.8125rem',
+                          fontWeight: 400,
+                          color: 'var(--text-secondary)',
+                          opacity: 0.8,
+                        }}
+                      >
+                        {lastMessage.text}
+                      </span>
+                    </>
+                  ) : lastMessage.senderPrefix ? (
+                    <>
+                      {lastMessage.senderAvatarUrl ? (
+                        <img
+                          src={lastMessage.senderAvatarUrl}
+                          alt=""
+                          style={{
+                            width: '16px',
+                            height: '16px',
+                            borderRadius: '50%',
+                            verticalAlign: 'text-bottom',
+                            marginRight: '4px',
+                            display: 'inline-block',
+                            objectFit: 'cover',
+                          }}
+                        />
+                      ) : (
+                        <span
+                          style={{
+                            width: '16px',
+                            height: '16px',
+                            borderRadius: '50%',
+                            verticalAlign: 'text-bottom',
+                            marginRight: '4px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.625rem',
+                            fontWeight: 600,
+                            color: '#fff',
+                            backgroundColor: '#6b8e9b',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {lastMessage.senderPrefix.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                      <span
+                        style={{
+                          fontSize: '0.8125rem',
+                          fontWeight: 500,
+                          color: 'var(--text-primary)',
+                          marginRight: '4px',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {lastMessage.senderPrefix}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '0.8125rem',
+                          fontWeight: 400,
+                          color: 'var(--text-secondary)',
+                          opacity: 0.8,
+                        }}
+                      >
+                        {lastMessage.text}
+                      </span>
+                    </>
+                  ) : (
                     <span
                       style={{
-                        color: 'var(--text-primary)',
-                        fontWeight: 500,
+                        fontSize: '0.8125rem',
+                        fontWeight: 400,
+                        color: 'var(--text-secondary)',
+                        opacity: 0.8,
                       }}
                     >
-                      {lastMessage.senderPrefix}
+                      {lastMessage.text}
                     </span>
                   )}
-                  <span>{lastMessage.text}</span>
                 </div>
               )}
             </Box>

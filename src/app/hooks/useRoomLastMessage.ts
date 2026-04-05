@@ -1,20 +1,24 @@
-import { MatrixEvent, Room, RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
+import { MatrixClient, MatrixEvent, Room, RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
 import { useEffect, useState } from 'react';
 import { MessageEvent } from '../../types/matrix/room';
+import { mxcUrlToHttp } from '../utils/matrix';
 
 export interface LastMessageInfo {
   senderPrefix: string | null;
+  senderAvatarUrl: string | null;
   text: string;
 }
 
 /**
  * Hook to get the last message info from a room's timeline
- * Returns { senderPrefix, text } formatted Telegram-style
+ * Returns { senderPrefix, senderAvatarUrl, text } formatted Telegram-style
  */
 export const useRoomLastMessage = (
   room: Room,
   isDirect: boolean | undefined,
-  myUserId: string | null
+  myUserId: string | null,
+  mx: MatrixClient,
+  useAuthentication: boolean
 ): LastMessageInfo | undefined => {
   const [lastMessage, setLastMessage] = useState<LastMessageInfo>();
 
@@ -70,6 +74,13 @@ export const useRoomLastMessage = (
           // Get sender name
           const senderName = evt.sender?.name || senderId?.split(':')[0];
 
+          // Get sender avatar URL
+          let senderAvatarUrl: string | null = null;
+          const senderMxc = evt.sender?.getMxcAvatarUrl?.();
+          if (senderMxc) {
+            senderAvatarUrl = mxcUrlToHttp(mx, senderMxc, useAuthentication, 24, 24, 'crop');
+          }
+
           // Determine sender prefix with strict if/else-if/else chain
           let senderPrefix: string | null = null;
 
@@ -81,11 +92,12 @@ export const useRoomLastMessage = (
             senderPrefix = null;
           } else {
             // Group/channel, not my message - show sender name
-            senderPrefix = senderName ? `${senderName}: ` : null;
+            senderPrefix = senderName || null;
           }
 
           return {
             senderPrefix,
+            senderAvatarUrl,
             text,
           };
         }
@@ -106,7 +118,7 @@ export const useRoomLastMessage = (
     return () => {
       room.removeListener(RoomEvent.Timeline, handleTimelineEvent);
     };
-  }, [room, isDirect, myUserId]);
+  }, [room, isDirect, myUserId, mx, useAuthentication]);
 
   return lastMessage;
 };
