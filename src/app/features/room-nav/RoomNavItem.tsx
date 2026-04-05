@@ -53,6 +53,7 @@ import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { useRoomName } from '../../hooks/useRoomMeta';
+import { useRoomLastMessage } from '../../hooks/useRoomLastMessage';
 import { useCallMembers, useCallSession } from '../../hooks/useCall';
 import { useCallEmbed, useCallStart } from '../../hooks/useCallEmbed';
 import { callChatAtom } from '../../state/callEmbed';
@@ -263,6 +264,7 @@ export function RoomNavItem({
   );
 
   const roomName = useRoomName(room);
+  const lastMessage = useRoomLastMessage(room);
 
   const handleContextMenu: MouseEventHandler<HTMLElement> = (evt) => {
     evt.preventDefault();
@@ -345,10 +347,52 @@ export function RoomNavItem({
                 />
               )}
             </Avatar>
-            <Box as="span" grow="Yes">
-              <Text priority={unread ? '500' : '300'} as="span" size="Inherit" truncate>
+            <Box
+              as="span"
+              grow="Yes"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'flex-start',
+                minHeight: '2.5rem',
+                overflow: 'hidden',
+              }}
+            >
+              <Text
+                priority={unread ? '500' : '300'}
+                as="span"
+                size="Inherit"
+                truncate
+                style={{
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  width: '100%',
+                }}
+              >
                 {roomName}
               </Text>
+              {lastMessage && (
+                <Text
+                  priority="300"
+                  as="span"
+                  size="Inherit"
+                  truncate
+                  style={{
+                    fontSize: '0.75rem',
+                    opacity: 0.6,
+                    marginTop: '0.125rem',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    width: '100%',
+                    display: 'block',
+                  }}
+                >
+                  {lastMessage}
+                </Text>
+              )}
             </Box>
             {!optionsVisible && !unread && !selected && typingMember.length > 0 && (
               <Badge size="300" variant="Secondary" fill="Soft" radii="Pill" outlined>
