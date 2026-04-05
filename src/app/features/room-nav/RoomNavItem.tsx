@@ -61,6 +61,8 @@ import { callChatAtom } from '../../state/callEmbed';
 import { useCallPreferencesAtom } from '../../state/hooks/callPreferences';
 import { useAutoDiscoveryInfo } from '../../hooks/useAutoDiscoveryInfo';
 import { livekitSupport } from '../../hooks/useLivekitSupport';
+import classNames from 'classnames';
+import * as css from './styles.css';
 
 type RoomNavItemMenuProps = {
   room: Room;
@@ -319,7 +321,11 @@ export function RoomNavItem({
       {...hoverProps}
       {...focusWithinProps}
     >
-      <NavLink to={linkPath} onClick={room.isCallRoom() ? handleStartCall : undefined}>
+      <NavLink
+        to={linkPath}
+        onClick={room.isCallRoom() ? handleStartCall : undefined}
+        className={css.RoomTile}
+      >
         <NavItemContent>
           <Box as="span" grow="Yes" alignItems="Center" gap="200">
             <Avatar size="200" radii="400">
@@ -396,7 +402,7 @@ export function RoomNavItem({
                       <span
                         style={{
                           fontSize: '0.8125rem',
-                          fontWeight: 500,
+                          fontWeight: 400,
                           color: 'var(--text-primary)',
                           marginRight: '4px',
                         }}
@@ -407,8 +413,8 @@ export function RoomNavItem({
                         style={{
                           fontSize: '0.8125rem',
                           fontWeight: 400,
-                          color: 'var(--text-secondary)',
-                          opacity: 0.8,
+                          color: '#8E8E93',
+                          opacity: 0.7,
                         }}
                       >
                         {lastMessage.text}
@@ -454,7 +460,7 @@ export function RoomNavItem({
                       <span
                         style={{
                           fontSize: '0.8125rem',
-                          fontWeight: 500,
+                          fontWeight: 400,
                           color: 'var(--text-primary)',
                           marginRight: '4px',
                           whiteSpace: 'nowrap',
@@ -466,8 +472,8 @@ export function RoomNavItem({
                         style={{
                           fontSize: '0.8125rem',
                           fontWeight: 400,
-                          color: 'var(--text-secondary)',
-                          opacity: 0.8,
+                          color: '#8E8E93',
+                          opacity: 0.7,
                         }}
                       >
                         {lastMessage.text}
@@ -478,8 +484,8 @@ export function RoomNavItem({
                       style={{
                         fontSize: '0.8125rem',
                         fontWeight: 400,
-                        color: 'var(--text-secondary)',
-                        opacity: 0.8,
+                        color: '#8E8E93',
+                        opacity: 0.7,
                       }}
                     >
                       {lastMessage.text}

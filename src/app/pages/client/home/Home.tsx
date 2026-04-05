@@ -238,14 +238,14 @@ export function Home() {
   const dmVirtualizer = useVirtualizer({
     count: sortedDms.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 38,
+    estimateSize: () => 64,
     overscan: 10,
   });
 
   const roomsVirtualizer = useVirtualizer({
     count: sortedRooms.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 38,
+    estimateSize: () => 64,
     overscan: 10,
   });
 
