@@ -1,6 +1,12 @@
 {
   "defaultHomeserver": 1,
-  "homeserverList": ["converser.eu", "matrix.org", "mozilla.org", "unredacted.org", "xmr.se"],
+  "homeserverList": [
+    "converser.eu",
+    "matrix.org",
+    "mozilla.org",
+    "unredacted.org",
+    "xmr.se"
+  ],
   "allowCustomHomeservers": true,
 
   "featuredCommunities": {
@@ -11,8 +17,7 @@
       "#space:unredacted.org",
       "#science-space:matrix.org",
       "#libregaming-games:tchncs.de",
-      "#mathematics-on:matrix.org",
-      "#stickers-and-emojis:tastytea.de"
+      "#mathematics-on:matrix.org"
     ],
     "rooms": [
       "#cinny:matrix.org",
@@ -22,11 +27,11 @@
       "#PrivSec.dev:arcticfoxes.net",
       "#disroot:aria-net.org"
     ],
-    "servers": ["matrixrooms.info", "matrix.org", "mozilla.org", "unredacted.org"]
+    "servers": [ "matrix.org", "mozilla.org", "unredacted.org" ]
   },
 
   "hashRouter": {
-    "enabled": false,
+    "enabled": true,
     "basename": "/"
   }
 }

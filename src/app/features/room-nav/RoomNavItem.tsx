@@ -54,6 +54,7 @@ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { useRoomName } from '../../hooks/useRoomMeta';
 import { useRoomLastMessage } from '../../hooks/useRoomLastMessage';
+import { useIsDirectRoom } from '../../hooks/useRoom';
 import { useCallMembers, useCallSession } from '../../hooks/useCall';
 import { useCallEmbed, useCallStart } from '../../hooks/useCallEmbed';
 import { callChatAtom } from '../../state/callEmbed';
@@ -264,7 +265,9 @@ export function RoomNavItem({
   );
 
   const roomName = useRoomName(room);
-  const lastMessage = useRoomLastMessage(room);
+  const isDirect = useIsDirectRoom();
+  const myUserId = mx.getUserId();
+  const lastMessage = useRoomLastMessage(room, isDirect, myUserId);
 
   const handleContextMenu: MouseEventHandler<HTMLElement> = (evt) => {
     evt.preventDefault();
@@ -355,7 +358,7 @@ export function RoomNavItem({
                 flexDirection: 'column',
                 justifyContent: 'center',
                 alignItems: 'flex-start',
-                minHeight: '2.5rem',
+                minHeight: '3rem',
                 overflow: 'hidden',
               }}
             >
@@ -374,24 +377,33 @@ export function RoomNavItem({
                 {roomName}
               </Text>
               {lastMessage && (
-                <Text
-                  priority="300"
-                  as="span"
-                  size="Inherit"
-                  truncate
+                <div
                   style={{
-                    fontSize: '0.75rem',
-                    opacity: 0.6,
-                    marginTop: '0.125rem',
-                    whiteSpace: 'nowrap',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
-                    textOverflow: 'ellipsis',
+                    whiteSpace: 'normal',
+                    wordBreak: 'break-word',
+                    color: 'gray',
+                    fontSize: '0.8rem',
+                    lineHeight: 1.25,
+                    marginTop: '2px',
                     width: '100%',
-                    display: 'block',
                   }}
                 >
-                  {lastMessage}
-                </Text>
+                  {lastMessage.senderPrefix && (
+                    <span
+                      style={{
+                        color: 'var(--text-primary)',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {lastMessage.senderPrefix}
+                    </span>
+                  )}
+                  <span>{lastMessage.text}</span>
+                </div>
               )}
             </Box>
             {!optionsVisible && !unread && !selected && typingMember.length > 0 && (
