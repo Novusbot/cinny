@@ -79,6 +79,7 @@ import { MemberPowerTag, StateEvent } from '../../../../types/matrix/room';
 import { PowerIcon } from '../../../components/power';
 import colorMXID from '../../../../util/colorMXID';
 import { getPowerTagIconSrc } from '../../../hooks/useMemberPowerTag';
+import { useOpenForwardDialog } from '../../../state/hooks/forwardDialog';
 
 export type ReactionHandler = (keyOrMxc: string, shortcode: string) => void;
 
@@ -721,6 +722,7 @@ export const Message = as<'div', MessageProps>(
     const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
     const senderId = mEvent.getSender() ?? '';
+    const openForwardDialog = useOpenForwardDialog();
 
     const [hover, setHover] = useState(false);
     const { hoverProps } = useHover({ onHoverChange: setHover });
@@ -1049,6 +1051,28 @@ export const Message = as<'div', MessageProps>(
                               </Text>
                             </MenuItem>
                           )}
+                          <MenuItem
+                            size="300"
+                            after={<Icon size="100" src={Icons.ArrowRight} />}
+                            radii="300"
+                            data-event-id={mEvent.getId()}
+                            onClick={() => {
+                              openForwardDialog({
+                                eventToForward: mEvent,
+                                roomId: room.roomId,
+                              });
+                              closeMenu();
+                            }}
+                          >
+                            <Text
+                              className={css.MessageMenuItemText}
+                              as="span"
+                              size="T300"
+                              truncate
+                            >
+                              Переслать
+                            </Text>
+                          </MenuItem>
                           {canEditEvent(mx, mEvent) && onEditId && (
                             <MenuItem
                               size="300"
