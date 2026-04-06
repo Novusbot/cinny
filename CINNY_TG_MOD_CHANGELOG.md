@@ -112,4 +112,52 @@
     * **Обратная связь:** Текст кнопки меняется на "Отправка..." во время отправки
     * **Обработка ошибок:** `try/catch` с логом ошибки
 
+## 8. Поведение тредов как в Element — скрытие ответов и кнопка "X replies"
+**Цель:** Скрыть ответы тредов из главной ленты и добавить кнопку для просмотра ответов на корневом сообщении.
+
+* **Фильтрация ответов тредов:**
+    * **Файл:** `src/app/features/room/RoomTimeline.tsx`
+    * **Реализация:** В `eventRenderer` добавлена проверка `mEvent.threadRootId !== undefined`
+    * Если сообщение является ответом в треде (`isThreadReply === true`), оно не рендерится в главной ленте
+    * Корневые сообщения тредов остаются видимыми
+
+* **Кнопка "X replies":**
+    * **Файл:** `src/app/features/room/message/Message.tsx`
+    * **Реализация:**
+        * Проверка является ли сообщение корнем треда: `room.getLiveTimeline().getEvents().filter(e => e.threadRootId === mEventId).length`
+        * Если есть ответы (`replyCount > 0`), отображается кнопка под текстом сообщения
+        * Формат кнопки: `{replyCount} replies` с иконкой `Icons.Thread`
+        * Стили: `Button` из folds, variant="Surface", fill="None", radii="Pill"
+
+* **Просмотр треда (ThreadTimeline):**
+    * **Файл:** `src/app/features/room/ThreadTimeline.tsx`
+    * **Реализация:**
+        * Использует те же данные, что и RoomTimeline (`room.getLiveTimeline().getEvents()`)
+        * Рендерит корневое сообщение + все ответы через `<Message>` + `<RenderMessageContent>`
+        * Визуальная линия слева для ответов (`borderLeft: 2px solid`)
+        * Отступ под размер аватарки (`marginLeft: 48px, paddingLeft: 16px`)
+
+* **Навигация:**
+    * **Файл:** `src/app/features/room/RoomView.tsx`
+    * Глобальный стейт `activeThread` (Jotai atom)
+    * Главная лента всегда в DOM (`display: none` при активном треде) для сохранения позиции скролла
+    * Thread view появляется поверх через `position: absolute`
+    * **Очистка стейта:** `useEffect` сбрасывает `activeThread` при смене комнаты
+
+* **Шапка чата (RoomViewHeader):**
+    * В режиме треда: кнопка "Назад" + "Тред: {room.name}"
+    * Тема комнаты скрыта
+    * Маленькая аватарка комнаты
+
+* **Поле ввода (RoomInput):**
+    * Автоматическая отправка в тред когда `activeThread` активен
+    * `content['m.relates_to'] = { rel_type: 'm.thread', event_id: activeThread, is_falling_back: true }`
+
+* **Перехват жестов навигации:**
+    * **Файлы:** `src/app/features/room/Room.tsx`, `src/app/hooks/useMacNavigation.ts`
+    * Свайп и ESC теперь закрывают тред (если открыт), а не комнату
+    * `useMacNavigation` принимает callback `onSwipeRight` для перехвата жеста
+    * Обработчик ESC проверяет `activeThread` перед навигацией домой
+    * Приоритет: 1) Закрыть тред → 2) Закрыть комнату
+
 ***

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { Box, Text, config } from 'folds';
 import { EventType } from 'matrix-js-sdk';
 import { ReactEditor } from 'slate-react';
@@ -10,6 +10,7 @@ import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useEditor } from '../../components/editor';
 import { RoomInputPlaceholder } from './RoomInputPlaceholder';
 import { RoomTimeline } from './RoomTimeline';
+import { ThreadTimeline } from './ThreadTimeline';
 import { RoomViewTyping } from './RoomViewTyping';
 import { RoomTombstone } from './RoomTombstone';
 import { RoomInput } from './RoomInput';
@@ -22,6 +23,7 @@ import { useSetting } from '../../state/hooks/settings';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoom } from '../../hooks/useRoom';
+import { useActiveThread, useSetActiveThread } from '../../state/hooks/activeThread';
 
 const FN_KEYS_REGEX = /^F\d+$/;
 const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
@@ -66,6 +68,16 @@ export function RoomView({ eventId }: { eventId?: string }) {
 
   const mx = useMatrixClient();
 
+  // Thread navigation state
+  const activeThread = useActiveThread();
+  const setActiveThread = useSetActiveThread();
+
+  // Clear active thread when switching rooms
+  useEffect(() => {
+    setActiveThread(null);
+    return () => setActiveThread(null);
+  }, [roomId, setActiveThread]);
+
   const tombstoneEvent = useStateEvent(room, StateEvent.RoomTombstone);
   const powerLevels = usePowerLevelsContext();
   const creators = useRoomCreators(room);
@@ -92,15 +104,44 @@ export function RoomView({ eventId }: { eventId?: string }) {
 
   return (
     <Page ref={roomViewRef}>
-      <Box grow="Yes" direction="Column">
-        <RoomTimeline
-          key={roomId}
-          room={room}
-          eventId={eventId}
-          roomInputRef={roomInputRef}
-          editor={editor}
-        />
-        <RoomViewTyping room={room} />
+      <Box grow="Yes" direction="Column" style={{ position: 'relative', minHeight: 0 }}>
+        {/* Main timeline - always in DOM to preserve scroll position */}
+        <Box
+          grow="Yes"
+          direction="Column"
+          style={{
+            display: activeThread ? 'none' : 'flex',
+            minHeight: 0,
+          }}
+        >
+          <RoomTimeline
+            key={roomId}
+            room={room}
+            eventId={eventId}
+            roomInputRef={roomInputRef}
+            editor={editor}
+          />
+          <RoomViewTyping room={room} />
+        </Box>
+
+        {/* Thread view - overlays the main timeline */}
+        {activeThread && (
+          <Box
+            grow="Yes"
+            direction="Column"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 1,
+            }}
+          >
+            <ThreadTimeline room={room} rootEventId={activeThread} />
+            <RoomViewTyping room={room} />
+          </Box>
+        )}
       </Box>
       <Box shrink="No" direction="Column">
         <div style={{ padding: `0 ${config.space.S400}` }}>

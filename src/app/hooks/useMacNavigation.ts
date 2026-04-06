@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getHomePath } from '../pages/pathUtils';
 
-const SWIPE_DEBOUNCE_MS = 500;
+const SWIPE_DEBOUNCE_MS = 1000; // 1 second cooldown to prevent double-triggering
 const SWIPE_DELTA_X_THRESHOLD = -40;
 const SWIPE_DELTA_Y_THRESHOLD = 10;
 
@@ -10,10 +10,13 @@ const SWIPE_DELTA_Y_THRESHOLD = 10;
  * Hook for macOS trackpad / Magic Mouse swipe navigation.
  * Swipe right (negative deltaX) navigates back to the home screen.
  *
+ * @param onSwipeRight - Optional callback to call before navigating home.
+ *   If the callback returns true, navigation is prevented (swipe was consumed).
+ *
  * NOTE: Escape key is handled separately by the parent component
  * (e.g. Room.tsx via useKeyDown) so that markAsRead can also run.
  */
-export const useMacNavigation = () => {
+export const useMacNavigation = (onSwipeRight?: () => boolean) => {
   const navigate = useNavigate();
   const swipeDebounceRef = useRef<number | null>(null);
 
@@ -31,14 +34,22 @@ export const useMacNavigation = () => {
         // Debounce: prevent multiple triggers from the same swipe gesture
         if (swipeDebounceRef.current !== null) return;
 
-        handleNavigateHome();
-
+        // Set cooldown IMMEDIATELY to block all subsequent wheel events
+        // from this same physical swipe gesture
         swipeDebounceRef.current = window.setTimeout(() => {
           swipeDebounceRef.current = null;
         }, SWIPE_DEBOUNCE_MS);
+
+        // Check if swipe was consumed (e.g., closing a thread)
+        if (onSwipeRight?.()) {
+          return; // Swipe consumed, don't navigate home
+        }
+
+        // If not consumed, navigate home
+        handleNavigateHome();
       }
     },
-    [handleNavigateHome]
+    [handleNavigateHome, onSwipeRight]
   );
 
   useEffect(() => {

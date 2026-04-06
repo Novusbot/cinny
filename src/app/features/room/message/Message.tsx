@@ -80,6 +80,7 @@ import { PowerIcon } from '../../../components/power';
 import colorMXID from '../../../../util/colorMXID';
 import { getPowerTagIconSrc } from '../../../hooks/useMemberPowerTag';
 import { useOpenForwardDialog } from '../../../state/hooks/forwardDialog';
+import { useSetActiveThread } from '../../../state/hooks/activeThread';
 
 export type ReactionHandler = (keyOrMxc: string, shortcode: string) => void;
 
@@ -723,6 +724,7 @@ export const Message = as<'div', MessageProps>(
     const useAuthentication = useMediaAuthentication();
     const senderId = mEvent.getSender() ?? '';
     const openForwardDialog = useOpenForwardDialog();
+    const setActiveThread = useSetActiveThread();
 
     const [hover, setHover] = useState(false);
     const { hoverProps } = useHover({ onHoverChange: setHover });
@@ -815,6 +817,38 @@ export const Message = as<'div', MessageProps>(
       </AvatarBase>
     );
 
+    const isThreadedMessage = mEvent.threadRootId !== undefined;
+
+    // Check if this message is a thread root with replies
+    // Count replies from live timeline since SDK thread object may be empty
+    const mEventId = mEvent.getId();
+    const allEvents = room.getLiveTimeline().getEvents();
+    const replyCount = mEventId ? allEvents.filter((e) => e.threadRootId === mEventId).length : 0;
+    const isThreadRoot = replyCount > 0 && !isThreadedMessage;
+
+    const handleThreadClick: MouseEventHandler<HTMLButtonElement> = useCallback(() => {
+      // Open the thread view, replacing the main timeline
+      const threadRootId = mEvent.getId();
+      if (threadRootId) {
+        setActiveThread(threadRootId);
+      }
+    }, [setActiveThread, mEvent]);
+
+    const repliesButtonJSX = isThreadRoot ? (
+      <Button
+        size="300"
+        variant="Surface"
+        fill="None"
+        radii="Pill"
+        outlined
+        style={{ marginTop: config.space.S100 }}
+        onClick={handleThreadClick}
+        before={<Icon size="50" src={Icons.Thread} />}
+      >
+        <Text size="T300">{replyCount} replies</Text>
+      </Button>
+    ) : null;
+
     const msgContentJSX = (
       <Box direction="Column" alignSelf="Start" style={{ maxWidth: '100%' }}>
         {reply}
@@ -833,6 +867,7 @@ export const Message = as<'div', MessageProps>(
         ) : (
           children
         )}
+        {repliesButtonJSX}
         {reactions}
       </Box>
     );
@@ -873,8 +908,6 @@ export const Message = as<'div', MessageProps>(
         setEmojiBoardAnchor(rect);
       }, 100);
     };
-
-    const isThreadedMessage = mEvent.threadRootId !== undefined;
 
     return (
       <MessageBase

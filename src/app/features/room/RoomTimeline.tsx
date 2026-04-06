@@ -1641,6 +1641,11 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       return null;
     }
 
+    // Hide thread replies from main timeline (keep thread roots visible)
+    if (mEvent.threadRootId !== undefined) {
+      return null;
+    }
+
     if (!newDivider && readUptoEventIdRef.current) {
       newDivider = prevEvent?.getId() === readUptoEventIdRef.current;
     }

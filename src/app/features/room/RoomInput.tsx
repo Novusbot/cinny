@@ -93,6 +93,7 @@ import { safeFile } from '../../utils/mimeTypes';
 import { fulfilledPromiseSettledResult } from '../../utils/common';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
+import { useActiveThread } from '../../state/hooks/activeThread';
 import {
   getAudioMsgContent,
   getFileMsgContent,
@@ -134,6 +135,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const [legacyUsernameColor] = useSetting(settingsAtom, 'legacyUsernameColor');
     const direct = useIsDirectRoom();
     const commands = useCommands(mx, room);
+    const activeThread = useActiveThread();
     const emojiBtnRef = useRef<HTMLButtonElement>(null);
     const roomToParents = useAtomValue(roomToParentsAtom);
     const powerLevels = usePowerLevelsContext();
@@ -371,13 +373,20 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           content['m.relates_to'].rel_type = RelationType.Thread;
           content['m.relates_to'].is_falling_back = false;
         }
+      } else if (activeThread) {
+        // Automatically add thread relation when viewing a thread
+        content['m.relates_to'] = {
+          rel_type: RelationType.Thread,
+          event_id: activeThread,
+          is_falling_back: true,
+        };
       }
       mx.sendMessage(roomId, content as any);
       resetEditor(editor);
       resetEditorHistory(editor);
       setReplyDraft(undefined);
       sendTypingStatus(false);
-    }, [mx, roomId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands]);
+    }, [mx, roomId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands, activeThread]);
 
     const handleKeyDown: KeyboardEventHandler = useCallback(
       (evt) => {

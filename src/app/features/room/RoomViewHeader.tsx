@@ -68,6 +68,7 @@ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import { RoomSettingsPage } from '../../state/roomSettings';
+import { useActiveThread, useSetActiveThread } from '../../state/hooks/activeThread';
 
 type RoomMenuProps = {
   room: Room;
@@ -264,6 +265,10 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
   const [pinMenuAnchor, setPinMenuAnchor] = useState<RectCords>();
   const direct = useIsDirectRoom();
 
+  // Thread navigation state
+  const activeThread = useActiveThread();
+  const setActiveThread = useSetActiveThread();
+
   const pinnedEvents = useRoomPinnedEvents(room);
   const encryptionEvent = useStateEvent(room, StateEvent.RoomEncryption);
   const encryptedRoom = !!encryptionEvent;
@@ -310,7 +315,13 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
       balance={screenSize === ScreenSize.Mobile}
     >
       <Box grow="Yes" gap="300">
-        {screenSize === ScreenSize.Mobile && (
+        {activeThread ? (
+          <Box shrink="No" alignItems="Center">
+            <IconButton fill="None" onClick={() => setActiveThread(null)}>
+              <Icon src={Icons.ArrowLeft} />
+            </IconButton>
+          </Box>
+        ) : screenSize === ScreenSize.Mobile ? (
           <BackRouteHandler>
             {(onBack) => (
               <Box shrink="No" alignItems="Center">
@@ -320,9 +331,29 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
               </Box>
             )}
           </BackRouteHandler>
-        )}
+        ) : null}
         <Box grow="Yes" alignItems="Center" gap="300">
-          {screenSize !== ScreenSize.Mobile && (
+          {activeThread ? (
+            <>
+              {screenSize !== ScreenSize.Mobile && (
+                <Avatar size="200">
+                  <RoomAvatar
+                    roomId={room.roomId}
+                    src={avatarUrl}
+                    alt={name}
+                    renderFallback={() => (
+                      <RoomIcon size="100" joinRule={room.getJoinRule()} roomType={room.getType()} />
+                    )}
+                  />
+                </Avatar>
+              )}
+              <Box direction="Column">
+                <Text size="H5" truncate>
+                  Тред: {name}
+                </Text>
+              </Box>
+            </>
+          ) : screenSize !== ScreenSize.Mobile ? (
             <Avatar size="300">
               <RoomAvatar
                 roomId={room.roomId}
@@ -333,49 +364,51 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
                 )}
               />
             </Avatar>
+          ) : null}
+          {!activeThread && (
+            <Box direction="Column">
+              <Text size={topic ? 'H5' : 'H3'} truncate>
+                {name}
+              </Text>
+              {topic && (
+                <UseStateProvider initial={false}>
+                  {(viewTopic, setViewTopic) => (
+                    <>
+                      <Overlay open={viewTopic} backdrop={<OverlayBackdrop />}>
+                        <OverlayCenter>
+                          <FocusTrap
+                            focusTrapOptions={{
+                              initialFocus: false,
+                              clickOutsideDeactivates: true,
+                              onDeactivate: () => setViewTopic(false),
+                              escapeDeactivates: stopPropagation,
+                            }}
+                          >
+                            <RoomTopicViewer
+                              name={name}
+                              topic={topic}
+                              requestClose={() => setViewTopic(false)}
+                            />
+                          </FocusTrap>
+                        </OverlayCenter>
+                      </Overlay>
+                      <Text
+                        as="button"
+                        type="button"
+                        onClick={() => setViewTopic(true)}
+                        className={css.HeaderTopic}
+                        size="T200"
+                        priority="300"
+                        truncate
+                      >
+                        {topic}
+                      </Text>
+                    </>
+                  )}
+                </UseStateProvider>
+              )}
+            </Box>
           )}
-          <Box direction="Column">
-            <Text size={topic ? 'H5' : 'H3'} truncate>
-              {name}
-            </Text>
-            {topic && (
-              <UseStateProvider initial={false}>
-                {(viewTopic, setViewTopic) => (
-                  <>
-                    <Overlay open={viewTopic} backdrop={<OverlayBackdrop />}>
-                      <OverlayCenter>
-                        <FocusTrap
-                          focusTrapOptions={{
-                            initialFocus: false,
-                            clickOutsideDeactivates: true,
-                            onDeactivate: () => setViewTopic(false),
-                            escapeDeactivates: stopPropagation,
-                          }}
-                        >
-                          <RoomTopicViewer
-                            name={name}
-                            topic={topic}
-                            requestClose={() => setViewTopic(false)}
-                          />
-                        </FocusTrap>
-                      </OverlayCenter>
-                    </Overlay>
-                    <Text
-                      as="button"
-                      type="button"
-                      onClick={() => setViewTopic(true)}
-                      className={css.HeaderTopic}
-                      size="T200"
-                      priority="300"
-                      truncate
-                    >
-                      {topic}
-                    </Text>
-                  </>
-                )}
-              </UseStateProvider>
-            )}
-          </Box>
         </Box>
 
         <Box shrink="No">
