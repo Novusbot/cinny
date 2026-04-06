@@ -118,12 +118,41 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
         setSendingRoomId(targetRoomId);
 
         const event = state.eventToForward;
-        // Get decrypted content if available
-        let content =
-          typeof event.getClearContent === 'function' ? event.getClearContent() : event.getContent();
+        
+        console.log('[Forward] Starting forward for event:', event.getId());
+        console.log('[Forward] Event type:', event.getType());
+        console.log('[Forward] Event sender:', event.getSender());
+        console.log('[Forward] Event isEncrypted:', event.isEncrypted?.());
+
+        // Get content - try multiple sources
+        let content = null;
+        
+        // Try getClearContent first (for decrypted events)
+        if (typeof event.getClearContent === 'function') {
+          content = event.getClearContent();
+          console.log('[Forward] Got content from getClearContent:', content);
+        }
+        
+        // Fallback to getContent
+        if (!content || Object.keys(content).length === 0) {
+          content = event.getContent();
+          console.log('[Forward] Got content from getContent:', content);
+        }
+        
+        // Fallback to raw event.event.content
+        if (!content || Object.keys(content).length === 0) {
+          content = event.event?.content;
+          console.log('[Forward] Got content from event.event.content:', content);
+        }
+
+        if (!content || Object.keys(content).length === 0) {
+          throw new Error('No content found in event. Event might not be decrypted yet.');
+        }
 
         // Deep copy to avoid mutating original
         content = JSON.parse(JSON.stringify(content));
+
+        console.log('[Forward] Content msgtype:', content?.msgtype);
 
         // Remove relations (reply, thread, etc.) - message should be standalone in new room
         delete content['m.relates_to'];
@@ -136,6 +165,11 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
           const senderName = event.sender?.name || event.getSender()?.split(':')[0] || 'Unknown';
           const originalRoom = mx.getRoom(originalRoomId);
           const roomName = originalRoom?.name || originalRoomId || 'комнаты';
+
+          console.log('[Forward] Original room:', originalRoomId);
+          console.log('[Forward] Original event:', originalEventId);
+          console.log('[Forward] Sender name:', senderName);
+          console.log('[Forward] Room name:', roomName);
 
           // Universal Matrix link that Cinny will intercept
           const messageLink = `https://matrix.to/#/${originalRoomId}/${originalEventId}`;
@@ -155,16 +189,26 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
           // Enable HTML formatting
           content.format = 'org.matrix.custom.html';
           content.formatted_body = forwardHtml + originalHtml;
+
+          console.log('[Forward] Final content body:', content.body);
         }
 
+        console.log('[Forward] Sending message to:', targetRoomId);
+        
         // Send message to target room
         await mx.sendMessage(targetRoomId, content as any);
+
+        console.log('[Forward] Message sent successfully');
 
         // Close dialog on success
         closeDialog();
       } catch (error) {
-        console.error('Failed to forward message:', error);
-        // TODO: Show error notification
+        console.error('[Forward] Failed to forward message:', error);
+        if (error instanceof Error) {
+          console.error('[Forward] Error message:', error.message);
+          console.error('[Forward] Error stack:', error.stack);
+        }
+        alert(`Не удалось переслать сообщение: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
       } finally {
         setSendingRoomId(null);
       }
