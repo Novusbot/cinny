@@ -14,7 +14,6 @@ import {
   TooltipProvider,
   as,
 } from 'folds';
-import FileSaver from 'file-saver';
 import { EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
 import FocusTrap from 'focus-trap-react';
 import { IFileInfo } from '../../../../types/matrix/common';
@@ -36,6 +35,7 @@ import {
 } from '../../../utils/matrix';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { ModalWide } from '../../../styles/Modal.css';
+import { downloadBlob } from '../../../utils/downloadBlob';
 
 const renderErrorButton = (retry: () => void, text: string) => (
   <TooltipProvider
@@ -261,9 +261,8 @@ export function DownloadFile({ body, mimeType, url, info, encInfo }: DownloadFil
         ? await downloadEncryptedMedia(mediaUrl, (encBuf) => decryptFile(encBuf, mimeType, encInfo))
         : await downloadMedia(mediaUrl);
 
-      const fileURL = URL.createObjectURL(fileContent);
-      FileSaver.saveAs(fileURL, body);
-      return fileURL;
+      await downloadBlob(fileContent, body);
+      return fileContent;
     }, [mx, url, useAuthentication, mimeType, encInfo, body])
   );
 
@@ -275,10 +274,12 @@ export function DownloadFile({ body, mimeType, url, info, encInfo }: DownloadFil
       fill="Soft"
       radii="300"
       size="400"
-      onClick={() =>
-        downloadState.status === AsyncStatus.Success
-          ? FileSaver.saveAs(downloadState.data, body)
-          : download()
+      onClick={async () =>
+        downloadState.status === AsyncStatus.Loading
+          ? undefined
+          : downloadState.status === AsyncStatus.Success && downloadState.data
+            ? await downloadBlob(downloadState.data, body)
+            : download()
       }
       disabled={downloadState.status === AsyncStatus.Loading}
       before={

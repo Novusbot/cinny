@@ -13,11 +13,11 @@ import {
   color,
   Spinner,
 } from 'folds';
-import FileSaver from 'file-saver';
 import to from 'await-to-js';
 import { AuthDict, IAuthData, MatrixError, UIAuthCallback } from 'matrix-js-sdk';
 import { PasswordInput } from './password-input';
 import { ContainerColor } from '../styles/ContainerColor.css';
+import { downloadBlob } from '../utils/downloadBlob';
 import { copyToClipboard } from '../utils/dom';
 import { AsyncStatus, useAsyncCallback } from '../hooks/useAsyncCallback';
 import { clearSecretStorageKeys } from '../../client/secretStorageKeys';
@@ -234,11 +234,11 @@ function RecoveryKeyDisplay({ recoveryKey }: RecoveryKeyDisplayProps) {
     copyToClipboard(recoveryKey);
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     const blob = new Blob([recoveryKey], {
       type: 'text/plain;charset=us-ascii',
     });
-    FileSaver.saveAs(blob, 'recovery-key.txt');
+    await downloadBlob(blob, 'recovery-key.txt');
   };
 
   const safeToDisplayKey = show ? recoveryKey : recoveryKey.replace(/[^\s]/g, '*');
