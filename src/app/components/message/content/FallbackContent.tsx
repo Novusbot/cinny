@@ -4,14 +4,24 @@ import React from 'react';
 const warningStyle = { color: color.Warning.Main, opacity: config.opacity.P300 };
 const criticalStyle = { color: color.Critical.Main, opacity: config.opacity.P300 };
 
+// Style for deleted message - matches Element design
+const deletedMessageStyle = {
+  backgroundColor: 'var(--bg-surface-hover, rgba(0, 0, 0, 0.05))',
+  color: 'var(--text-secondary, #8a9bae)',
+  padding: '8px 12px',
+  borderRadius: '8px',
+  fontSize: '0.875rem',
+  fontWeight: 400,
+};
+
 export const MessageDeletedContent = as<'div', { children?: never; reason?: string }>(
   ({ reason, ...props }, ref) => (
-    <Box as="span" alignItems="Center" gap="100" style={warningStyle} {...props} ref={ref}>
+    <Box as="span" alignItems="Center" gap="100" style={deletedMessageStyle} {...props} ref={ref}>
       <Icon size="50" src={Icons.Delete} />
       {reason ? (
-        <i>This message has been deleted. {reason}</i>
+        <span>Сообщение удалено. {reason}</span>
       ) : (
-        <i>This message has been deleted</i>
+        <span>Сообщение удалено</span>
       )}
     </Box>
   )

@@ -1637,12 +1637,22 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     if (eventSender && ignoredUsersSet.has(eventSender)) {
       return null;
     }
-    if (mEvent.isRedacted() && !showHiddenEvents) {
-      return null;
-    }
 
     // Hide thread replies from main timeline (keep thread roots visible)
     if (mEvent.threadRootId !== undefined) {
+      return null;
+    }
+
+    // Hide redacted events UNLESS they are thread roots with replies
+    // This ensures users can still access thread replies even if the root message was deleted
+    // We check the room's live timeline directly since thread replies are filtered out here
+    const hasThreadReplies = mEventId
+      ? room
+          .getLiveTimeline()
+          .getEvents()
+          .some((e: MatrixEvent) => e.threadRootId === mEventId)
+      : false;
+    if (mEvent.isRedacted() && !showHiddenEvents && !hasThreadReplies) {
       return null;
     }
 
