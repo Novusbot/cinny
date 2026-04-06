@@ -1,4 +1,4 @@
-import { MatrixClient, MatrixEvent, Room, RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
+import { MatrixClient, MatrixEvent, Room, RoomEvent, RoomEventHandlerMap, EventType, RelationType } from 'matrix-js-sdk';
 import { useEffect, useState, useCallback } from 'react';
 import { MessageEvent } from '../../types/matrix/room';
 import { mxcUrlToHttp } from '../utils/matrix';
@@ -57,6 +57,22 @@ export const useRoomLastMessage = (
     }
   }, []);
 
+  // Helper to extract text from a target event (handling encryption)
+  const getTargetEventText = useCallback((targetEvent: MatrixEvent | null): string => {
+    if (!targetEvent) return '""message""';
+
+    const content = targetEvent.getContent();
+    const clearContent = typeof targetEvent.getClearContent === 'function' 
+      ? targetEvent.getClearContent() 
+      : null;
+    const body = clearContent?.body || content?.body;
+
+    if (!body) return '""message""';
+
+    // Sanitize: replace newlines with spaces
+    return body.replace(/\n/g, ' ');
+  }, []);
+
   const getLastMessageInfo = useCallback((): LastMessageInfo | undefined => {
     const liveEvents = room.getLiveTimeline().getEvents();
 
@@ -69,6 +85,54 @@ export const useRoomLastMessage = (
     for (let i = liveEvents.length - 1; i >= 0; i -= 1) {
       const evt = liveEvents[i];
       if (!evt) continue;
+
+      // Handle reactions
+      if (evt.getType() === EventType.Reaction) {
+        const relatesTo = evt.getContent()['m.relates_to'];
+        if (!relatesTo || relatesTo.rel_type !== RelationType.Annotation) continue;
+
+        const emoji = relatesTo.key;
+        const targetEventId = relatesTo.event_id;
+        
+        if (!emoji || !targetEventId) continue;
+
+        // Get reaction sender name
+        const reactionSenderId = evt.getSender();
+        const isMyReaction = myUserId ? reactionSenderId === myUserId : false;
+        const reactionSenderName = evt.sender?.name || reactionSenderId?.split(':')[0];
+        
+        // Try to find the target event in the room timeline
+        const targetEvent = room.findEventById(targetEventId);
+        const targetText = getTargetEventText(targetEvent);
+
+        // Format: "Вы отреагировали 👍 на Hello world" or "John reacted 👋 on Hi there"
+        const reactionText = isMyReaction
+          ? `Вы отреагировали ${emoji} на ${targetText}`
+          : `${reactionSenderName} отреагировал ${emoji} на ${targetText}`;
+
+        // Get reaction sender avatar for group chats
+        let senderAvatarUrl: string | null = null;
+        const senderMxc = evt.sender?.getMxcAvatarUrl?.();
+        if (senderMxc) {
+          senderAvatarUrl = mxcUrlToHttp(mx, senderMxc, useAuthentication, 24, 24, 'crop');
+        }
+
+        // For reactions, prefix logic:
+        // - My reaction: "Вы отреагировали" (embedded in text, no prefix)
+        // - Other's reaction in DM: null (no prefix)
+        // - Other's reaction in group: reaction sender name
+        let senderPrefix: string | null = null;
+        if (!isMyReaction && !effectiveIsDirect) {
+          senderPrefix = reactionSenderName || null;
+        }
+
+        return {
+          senderPrefix,
+          senderAvatarUrl,
+          text: reactionText,
+          timestamp: evt.getDate(),
+        };
+      }
 
       // Only consider message events
       if (
@@ -117,7 +181,7 @@ export const useRoomLastMessage = (
     }
 
     return undefined;
-  }, [room, isDirect, myUserId, mx, useAuthentication, getTextFromEvent]);
+  }, [room, isDirect, myUserId, mx, useAuthentication, getTextFromEvent, getTargetEventText]);
 
   useEffect(() => {
 
