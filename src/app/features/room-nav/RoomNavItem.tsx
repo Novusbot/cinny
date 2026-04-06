@@ -25,6 +25,7 @@ import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
 import { getDirectRoomAvatarUrl, getRoomAvatarUrl } from '../../utils/room';
 import { nameInitials } from '../../utils/common';
+import { formatLastMessageTime } from '../../utils/formatTime';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRoomUnread } from '../../state/hooks/unread';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
@@ -366,6 +367,7 @@ export function RoomNavItem({
                 alignItems: 'flex-start',
                 minHeight: '3rem',
                 overflow: 'hidden',
+                minWidth: 0,
               }}
             >
               <Text
@@ -494,30 +496,58 @@ export function RoomNavItem({
                 </div>
               )}
             </Box>
-            {!optionsVisible && !unread && !selected && typingMember.length > 0 && (
-              <Badge size="300" variant="Secondary" fill="Soft" radii="Pill" outlined>
-                <TypingIndicator size="300" disableAnimation />
-              </Badge>
-            )}
-            {!optionsVisible && unread && (
-              <UnreadBadgeCenter>
-                <UnreadBadge highlight={unread.highlight > 0} count={unread.total} />
-              </UnreadBadgeCenter>
-            )}
-            {!optionsVisible && notificationMode !== RoomNotificationMode.Unset && (
-              <Icon
-                size="50"
-                src={getRoomNotificationModeIcon(notificationMode)}
-                aria-label={notificationMode}
-              />
-            )}
-            {room.isCallRoom() && callMembers.length > 0 && (
-              <Badge variant="Critical" fill="Solid" size="400">
-                <Text as="span" size="L400" truncate>
-                  {callMembers.length} Live
-                </Text>
-              </Badge>
-            )}
+            {/* Right column with timestamp and badges */}
+            <Box
+              as="span"
+              shrink="No"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-end',
+                marginLeft: 'auto',
+                flexShrink: 0,
+                paddingLeft: '8px',
+              }}
+            >
+              {lastMessage?.timestamp && (
+                <div
+                  style={{
+                    fontSize: '0.7rem',
+                    color: '#8E8E93',
+                    marginBottom: '4px',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {formatLastMessageTime(lastMessage.timestamp)}
+                </div>
+              )}
+              <Box shrink="No" alignItems="Center" gap="200">
+                {!optionsVisible && !unread && !selected && typingMember.length > 0 && (
+                  <Badge size="300" variant="Secondary" fill="Soft" radii="Pill" outlined>
+                    <TypingIndicator size="300" disableAnimation />
+                  </Badge>
+                )}
+                {!optionsVisible && unread && (
+                  <UnreadBadgeCenter>
+                    <UnreadBadge highlight={unread.highlight > 0} count={unread.total} />
+                  </UnreadBadgeCenter>
+                )}
+                {!optionsVisible && notificationMode !== RoomNotificationMode.Unset && (
+                  <Icon
+                    size="50"
+                    src={getRoomNotificationModeIcon(notificationMode)}
+                    aria-label={notificationMode}
+                  />
+                )}
+                {room.isCallRoom() && callMembers.length > 0 && (
+                  <Badge variant="Critical" fill="Solid" size="400">
+                    <Text as="span" size="L400" truncate>
+                      {callMembers.length} Live
+                    </Text>
+                  </Badge>
+                )}
+              </Box>
+            </Box>
           </Box>
         </NavItemContent>
       </NavLink>

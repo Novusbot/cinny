@@ -7,6 +7,7 @@ export interface LastMessageInfo {
   senderPrefix: string | null;
   senderAvatarUrl: string | null;
   text: string;
+  timestamp: Date | null;
 }
 
 /**
@@ -110,6 +111,7 @@ export const useRoomLastMessage = (
           senderPrefix,
           senderAvatarUrl,
           text,
+          timestamp: evt.getDate(),
         };
       }
     }
