@@ -74,110 +74,69 @@ export const useRoomLastMessage = (
   }, []);
 
   const getLastMessageInfo = useCallback((): LastMessageInfo | undefined => {
+    // Получаем закэшированные события — сначала из live timeline, фоллбэк на сырой timeline
     const liveEvents = room.getLiveTimeline().getEvents();
+    const events = liveEvents.length > 0 ? liveEvents : (room as any).timeline || liveEvents;
 
     // Determine if this is a direct/DM chat with fallback
     // A room is considered DM if explicitly flagged OR if it has exactly 2 members
     const joinedCount = room.getJoinedMemberCount();
     const effectiveIsDirect = isDirect === true || joinedCount === 2;
 
-    // Iterate from the end to find the last message event
-    for (let i = liveEvents.length - 1; i >= 0; i -= 1) {
-      const evt = liveEvents[i];
-      if (!evt) continue;
+    // Идем с конца массива в поисках первого нормального сообщения
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      const evt = events[i];
+      if (!evt || typeof evt.getType !== 'function') continue;
 
-      // Handle reactions
-      if (evt.getType() === EventType.Reaction) {
-        const relatesTo = evt.getContent()['m.relates_to'];
-        if (!relatesTo || relatesTo.rel_type !== RelationType.Annotation) continue;
+      const type = evt.getType();
 
-        const emoji = relatesTo.key;
-        const targetEventId = relatesTo.event_id;
-        
-        if (!emoji || !targetEventId) continue;
-
-        // Get reaction sender name
-        const reactionSenderId = evt.getSender();
-        const isMyReaction = myUserId ? reactionSenderId === myUserId : false;
-        const reactionSenderName = evt.sender?.name || reactionSenderId?.split(':')[0];
-        
-        // Try to find the target event in the room timeline
-        const targetEvent = room.findEventById(targetEventId);
-        const targetText = getTargetEventText(targetEvent);
-
-        // Format: "Вы отреагировали 👍 на Hello world" or "John reacted 👋 on Hi there"
-        const reactionText = isMyReaction
-          ? `Вы отреагировали ${emoji} на ${targetText}`
-          : `${reactionSenderName} отреагировал ${emoji} на ${targetText}`;
-
-        // Get reaction sender avatar for group chats
-        let senderAvatarUrl: string | null = null;
-        const senderMxc = evt.sender?.getMxcAvatarUrl?.();
-        if (senderMxc) {
-          senderAvatarUrl = mxcUrlToHttp(mx, senderMxc, useAuthentication, 24, 24, 'crop');
-        }
-
-        // For reactions, prefix logic:
-        // - My reaction: "Вы отреагировали" (embedded in text, no prefix)
-        // - Other's reaction in DM: null (no prefix)
-        // - Other's reaction in group: reaction sender name
-        let senderPrefix: string | null = null;
-        if (!isMyReaction && !effectiveIsDirect) {
-          senderPrefix = reactionSenderName || null;
-        }
-
-        return {
-          senderPrefix,
-          senderAvatarUrl,
-          text: reactionText,
-          timestamp: evt.getDate(),
-        };
-      }
-
-      // Only consider message events
+      // Пропускаем всё кроме реальных сообщений
       if (
-        evt.getType() === MessageEvent.RoomMessage ||
-        evt.getType() === MessageEvent.RoomMessageEncrypted
+        type !== MessageEvent.RoomMessage &&
+        type !== MessageEvent.RoomMessageEncrypted &&
+        type !== 'm.sticker'
       ) {
-        const text = getTextFromEvent(evt);
-
-        if (!text) continue;
-
-        // Check if message is from current user
-        const senderId = evt.getSender();
-        const isMe = myUserId ? senderId === myUserId : false;
-
-        // Get sender name
-        const senderName = evt.sender?.name || senderId?.split(':')[0];
-
-        // Get sender avatar URL
-        let senderAvatarUrl: string | null = null;
-        const senderMxc = evt.sender?.getMxcAvatarUrl?.();
-        if (senderMxc) {
-          senderAvatarUrl = mxcUrlToHttp(mx, senderMxc, useAuthentication, 24, 24, 'crop');
-        }
-
-        // Determine sender prefix with strict if/else-if/else chain
-        let senderPrefix: string | null = null;
-
-        if (isMe) {
-          // My own message - always show "Вы: "
-          senderPrefix = 'Вы: ';
-        } else if (effectiveIsDirect) {
-          // Direct/private chat, not my message - NO prefix
-          senderPrefix = null;
-        } else {
-          // Group/channel, not my message - show sender name
-          senderPrefix = senderName || null;
-        }
-
-        return {
-          senderPrefix,
-          senderAvatarUrl,
-          text,
-          timestamp: evt.getDate(),
-        };
+        continue;
       }
+
+      const text = getTextFromEvent(evt);
+
+      if (!text) continue;
+
+      // Check if message is from current user
+      const senderId = evt.getSender();
+      const isMe = myUserId ? senderId === myUserId : false;
+
+      // Get sender name
+      const senderName = evt.sender?.name || senderId?.split(':')[0];
+
+      // Get sender avatar URL
+      let senderAvatarUrl: string | null = null;
+      const senderMxc = evt.sender?.getMxcAvatarUrl?.();
+      if (senderMxc) {
+        senderAvatarUrl = mxcUrlToHttp(mx, senderMxc, useAuthentication, 24, 24, 'crop');
+      }
+
+      // Determine sender prefix with strict if/else-if/else chain
+      let senderPrefix: string | null = null;
+
+      if (isMe) {
+        // My own message - always show "Вы: "
+        senderPrefix = 'Вы: ';
+      } else if (effectiveIsDirect) {
+        // Direct/private chat, not my message - NO prefix
+        senderPrefix = null;
+      } else {
+        // Group/channel, not my message - show sender name
+        senderPrefix = senderName || null;
+      }
+
+      return {
+        senderPrefix,
+        senderAvatarUrl,
+        text,
+        timestamp: evt.getDate(),
+      };
     }
 
     return undefined;

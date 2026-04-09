@@ -106,6 +106,7 @@ import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
 import { GetContentCallback, MessageEvent, StateEvent } from '../../../types/matrix/room';
 import { useKeyDown } from '../../hooks/useKeyDown';
 import { useDocumentFocusChange } from '../../hooks/useDocumentFocusChange';
+import { StateEventGroup } from '../../components/state-event-group';
 import { RenderMessageContent } from '../../components/RenderMessageContent';
 import { Image } from '../../components/media';
 import { ImageViewer } from '../../components/image-viewer';
@@ -208,6 +209,12 @@ export const getTimelineRelativeIndex = (absoluteIndex: number, timelineBaseInde
 
 export const getTimelineEvent = (timeline: EventTimeline, index: number): MatrixEvent | undefined =>
   timeline.getEvents()[index];
+
+// Helper to check if an event is a state event (system event)
+const isStateEvent = (evt: MatrixEvent | undefined): boolean => {
+  if (!evt) return false;
+  return typeof evt.getStateKey === 'function' && typeof evt.getStateKey() === 'string';
+};
 
 export const getEventIdAbsoluteIndex = (
   timelines: EventTimeline[],
@@ -1624,7 +1631,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   let isPrevRendered = false;
   let newDivider = false;
   let dayDivider = false;
+  // Track the last index of a state event group that was rendered
+  let lastStateGroupEndIndex = -1;
+
   const eventRenderer = (item: number) => {
+    // Skip if this event was already rendered as part of a state event group
+    if (item <= lastStateGroupEndIndex) return null;
+
     const [eventTimeline, baseIndex] = getTimelineAndBaseIndex(timeline.linkedTimelines, item);
     if (!eventTimeline) return null;
     const timelineSet = eventTimeline?.getTimelineSet();
@@ -1672,7 +1685,68 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       prevEvent.getType() === mEvent.getType() &&
       minuteDifference(prevEvent.getTs(), mEvent.getTs()) < 2;
 
-    const eventJSX = reactionOrEditEvent(mEvent)
+    // Check if this is a state event and look ahead for consecutive state events
+    const isState = isStateEvent(mEvent) && !reactionOrEditEvent(mEvent);
+    let stateGroupEvents: React.ReactNode[] = [];
+    let stateGroupCount = 0;
+
+    if (isState) {
+      // Collect consecutive state events
+      const events = eventTimeline.getEvents();
+      const relativeIdx = getTimelineRelativeIndex(item, baseIndex);
+      
+      // Count how many consecutive state events follow this one
+      for (let i = relativeIdx + 1; i < events.length; i++) {
+        const nextEv = events[i];
+        if (!nextEv) break;
+        // Skip reactions and edits
+        if (reactionOrEditEvent(nextEv)) continue;
+        if (!isStateEvent(nextEv)) break;
+        stateGroupCount++;
+      }
+
+      // If there are multiple consecutive state events, render them as a group
+      if (stateGroupCount > 0) {
+        // Render the current event
+        const currentJSX = renderMatrixEvent(
+          mEvent.getType(),
+          true, // is state event
+          mEventId,
+          mEvent,
+          item,
+          timelineSet,
+          false
+        );
+        if (currentJSX) stateGroupEvents.push(currentJSX);
+
+        // Render the following state events
+        for (let i = 0; i < stateGroupCount; i++) {
+          const groupIdx = relativeIdx + 1 + i;
+          const groupEv = events[groupIdx];
+          if (!groupEv || !groupEv.getId()) continue;
+          // Skip reactions/edits in the group
+          if (reactionOrEditEvent(groupEv)) continue;
+          
+          const groupJSX = renderMatrixEvent(
+            groupEv.getType(),
+            true, // is state event
+            groupEv.getId()!,
+            groupEv,
+            baseIndex + groupIdx,
+            timelineSet,
+            false
+          );
+          if (groupJSX) stateGroupEvents.push(groupJSX);
+        }
+
+        // Update the last state group end index so we skip these events
+        lastStateGroupEndIndex = baseIndex + relativeIdx + stateGroupCount;
+      }
+    }
+
+    const eventJSX = stateGroupEvents.length > 0 ? (
+      <StateEventGroup events={stateGroupEvents} collapsedCount={stateGroupCount} />
+    ) : reactionOrEditEvent(mEvent)
       ? null
       : renderMatrixEvent(
           mEvent.getType(),
