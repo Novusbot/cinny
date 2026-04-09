@@ -278,4 +278,4 @@
     * Slate editor требует использования `Node.string()` вместо `Range.text` (не существует в Slate)
     * Fallback-логика для получения выделенного текста через `editor.fragment(selection)`
 
-***
+

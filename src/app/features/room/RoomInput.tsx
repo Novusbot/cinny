@@ -120,6 +120,12 @@ import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
 import { useComposingCheck } from '../../hooks/useComposingCheck';
 import { useOpenInsertLinkDialog } from '../../state/hooks/insertLinkDialog';
 
+// Import Tauri clipboard manager for desktop app
+import { readText as readTauriClipboard } from '@tauri-apps/plugin-clipboard-manager';
+
+// Helper to detect if running in Tauri environment
+const isTauri = () => '__TAURI_INTERNALS__' in window;
+
 interface RoomInputProps {
   editor: Editor;
   fileDropContainerRef: RefObject<HTMLElement>;
@@ -426,8 +432,23 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             }
           }
           
-          // Try to read URL from clipboard
-          navigator.clipboard.readText().then((clipboardText) => {
+          // Read clipboard using Tauri API in desktop app or Web API in browser
+          const readClipboard = async (): Promise<string> => {
+            try {
+              if (isTauri()) {
+                // Use Tauri native clipboard plugin
+                return await readTauriClipboard() || '';
+              } else {
+                // Use Web API for browser version
+                return await navigator.clipboard.readText() || '';
+              }
+            } catch (err) {
+              console.warn('Failed to read clipboard:', err);
+              return '';
+            }
+          };
+          
+          readClipboard().then((clipboardText) => {
             const isUrl = /^https?:\/\//.test(clipboardText.trim());
             const defaultUrl = isUrl ? clipboardText.trim() : '';
             
@@ -451,25 +472,6 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                 }
                 
                 // Focus the editor
-                ReactEditor.focus(editor);
-              }
-            });
-          }).catch(() => {
-            // If clipboard access fails, just open the dialog
-            openInsertLinkDialog({
-              initialText: selectedText,
-              initialUrl: '',
-              onInsert: (text, url) => {
-                const displayText = text || url;
-                const markdownLink = `[${displayText}](${url})`;
-                
-                if (selection && !Range.isCollapsed(selection)) {
-                  Transforms.delete(editor);
-                  Transforms.insertText(editor, markdownLink);
-                } else {
-                  Transforms.insertText(editor, markdownLink);
-                }
-                
                 ReactEditor.focus(editor);
               }
             });
