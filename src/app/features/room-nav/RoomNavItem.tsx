@@ -22,7 +22,7 @@ import FocusTrap from 'focus-trap-react';
 import { useAtom, useAtomValue } from 'jotai';
 import { NavItem, NavItemContent, NavItemOptions, NavLink } from '../../components/nav';
 import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
-import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
+import { RoomAvatar } from '../../components/room-avatar';
 import { getDirectRoomAvatarUrl, getRoomAvatarUrl } from '../../utils/room';
 import { nameInitials } from '../../utils/common';
 import { formatLastMessageTime } from '../../utils/formatTime';
@@ -245,13 +245,11 @@ type RoomNavItemProps = {
   selected: boolean;
   linkPath: string;
   notificationMode?: RoomNotificationMode;
-  showAvatar?: boolean;
   direct?: boolean;
 };
 export function RoomNavItem({
   room,
   selected,
-  showAvatar,
   direct,
   notificationMode,
   linkPath,
@@ -330,32 +328,20 @@ export function RoomNavItem({
         <NavItemContent>
           <Box as="span" grow="Yes" alignItems="Center" gap="200">
             <Avatar size="200" radii="400">
-              {showAvatar ? (
-                <RoomAvatar
-                  roomId={room.roomId}
-                  src={
-                    direct
-                      ? getDirectRoomAvatarUrl(mx, room, 96, useAuthentication)
-                      : getRoomAvatarUrl(mx, room, 96, useAuthentication)
-                  }
-                  alt={roomName}
-                  renderFallback={() => (
-                    <Text as="span" size="H6">
-                      {nameInitials(roomName)}
-                    </Text>
-                  )}
-                />
-              ) : (
-                <RoomIcon
-                  style={{
-                    opacity: unread ? config.opacity.P500 : config.opacity.P300,
-                  }}
-                  filled={selected}
-                  size="100"
-                  joinRule={room.getJoinRule()}
-                  roomType={room.getType()}
-                />
-              )}
+              <RoomAvatar
+                roomId={room.roomId}
+                src={
+                  direct
+                    ? getDirectRoomAvatarUrl(mx, room, 96, useAuthentication)
+                    : getRoomAvatarUrl(mx, room, 96, useAuthentication)
+                }
+                alt={roomName}
+                renderFallback={() => (
+                  <Text as="span" size="H6">
+                    {nameInitials(roomName)}
+                  </Text>
+                )}
+              />
             </Avatar>
             <Box
               as="span"

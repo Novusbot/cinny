@@ -364,7 +364,6 @@ export function Home() {
                       <RoomNavItem
                         room={room}
                         selected={selected}
-                        showAvatar
                         direct
                         linkPath={getDirectRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
                         notificationMode={getRoomNotificationMode(
