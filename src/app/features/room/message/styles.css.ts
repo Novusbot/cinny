@@ -1,5 +1,5 @@
 import { style } from '@vanilla-extract/css';
-import { DefaultReset, config, toRem } from 'folds';
+import { DefaultReset, config, toRem, color } from 'folds';
 
 export const MessageBase = style({
   position: 'relative',
@@ -57,14 +57,29 @@ export const ReactionsTooltipText = style({
 });
 
 export const ThreadSummaryButton = style({
-  maxWidth: '400px',
+  maxWidth: '100%',
   width: 'max-content',
   marginTop: config.space.S100,
+  backgroundColor: color.SurfaceVariant.Container,
+  border: `1px solid transparent`,
+  padding: `${toRem(4)} ${toRem(8)}`,
+  fontSize: toRem(12),
+  selectors: {
+    '&:hover': {
+      backgroundColor: color.SurfaceVariant.ContainerHover,
+    },
+  },
 });
 
 export const ThreadSummaryContent = style({
   width: '100%',
   overflow: 'hidden',
+  minWidth: 0,
+  color: color.SurfaceVariant.OnContainer,
+});
+
+export const ThreadSummaryCountBox = style({
+  flexShrink: 0,
 });
 
 export const ThreadSummaryPreviewText = style({

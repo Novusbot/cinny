@@ -852,23 +852,28 @@ export const Message = as<'div', MessageProps>(
         variant="Surface"
         fill="None"
         radii="Pill"
-        outlined
         className={css.ThreadSummaryButton}
         onClick={handleThreadClick}
       >
-        <Box 
-          gap="200" 
-          alignItems="Center" 
+        <Box
+          gap="200"
+          alignItems="Center"
           className={css.ThreadSummaryContent}
         >
-          <Box shrink="No" gap="100" alignItems="Center" direction="Row">
+          <Box
+            shrink="No"
+            gap="100"
+            alignItems="Center"
+            direction="Row"
+            className={css.ThreadSummaryCountBox}
+          >
             <Icon size="50" src={Icons.Thread} />
-            <Text size="T300">{replyCount} {replyCount === 1 ? 'reply' : 'replies'}</Text>
+            <Text size="T200">{replyCount} {replyCount === 1 ? 'reply' : 'replies'}</Text>
           </Box>
           {lastReply && lastReplySender && (
             <>
               <Box shrink="No" style={{ opacity: config.opacity.P300 }}>
-                <Text size="T200">·</Text>
+                <Text size="T100">·</Text>
               </Box>
               <AvatarBase className={css.ThreadSummaryAvatarBase}>
                 <Avatar
@@ -888,7 +893,7 @@ export const Message = as<'div', MessageProps>(
                 </Avatar>
               </AvatarBase>
               <Text
-                size="T300"
+                size="T200"
                 truncate
                 className={css.ThreadSummaryPreviewText}
               >
