@@ -11,7 +11,7 @@ import { useAtom, useAtomValue } from 'jotai';
 import { isKeyHotkey } from 'is-hotkey';
 import { EventType, IContent, MsgType, RelationType, Room } from 'matrix-js-sdk';
 import { ReactEditor } from 'slate-react';
-import { Transforms, Editor } from 'slate';
+import { Transforms, Editor, Range, Node } from 'slate';
 import {
   Box,
   Dialog,
@@ -118,6 +118,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
 import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
 import { useComposingCheck } from '../../hooks/useComposingCheck';
+import { useOpenInsertLinkDialog } from '../../state/hooks/insertLinkDialog';
 
 interface RoomInputProps {
   editor: Editor;
@@ -129,6 +130,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
   ({ editor, fileDropContainerRef, roomId, room }, ref) => {
     const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
+    const openInsertLinkDialog = useOpenInsertLinkDialog();
     const [enterForNewline] = useSetting(settingsAtom, 'enterForNewline');
     const [isMarkdown] = useSetting(settingsAtom, 'isMarkdown');
     const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
@@ -405,8 +407,76 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           }
           setReplyDraft(undefined);
         }
+        // Handle Cmd+K / Ctrl+K for inserting links
+        if (isKeyHotkey('mod+k', evt)) {
+          evt.preventDefault();
+          
+          // Get the current selection from the Slate editor
+          const { selection } = editor;
+          let selectedText = '';
+          
+          if (selection && !Range.isCollapsed(selection)) {
+            // Get selected text from Slate editor using the proper method
+            selectedText = (Node.string(editor) || '').slice(selection.anchor.offset, selection.focus.offset);
+            
+            // Fallback: try getting text from the selected range
+            if (!selectedText) {
+              const fragment = editor.fragment(selection);
+              selectedText = fragment.map(node => Node.string(node)).join('');
+            }
+          }
+          
+          // Try to read URL from clipboard
+          navigator.clipboard.readText().then((clipboardText) => {
+            const isUrl = /^https?:\/\//.test(clipboardText.trim());
+            const defaultUrl = isUrl ? clipboardText.trim() : '';
+            
+            // Open the insert link dialog
+            openInsertLinkDialog({
+              initialText: selectedText,
+              initialUrl: defaultUrl,
+              onInsert: (text, url) => {
+                // If no text is provided, use the URL as the display text
+                const displayText = text || url;
+                const markdownLink = `[${displayText}](${url})`;
+                
+                // Insert the markdown link into the editor
+                if (selection && !Range.isCollapsed(selection)) {
+                  // Replace the selected text with the markdown link
+                  Transforms.delete(editor);
+                  Transforms.insertText(editor, markdownLink);
+                } else {
+                  // Insert at cursor if no selection
+                  Transforms.insertText(editor, markdownLink);
+                }
+                
+                // Focus the editor
+                ReactEditor.focus(editor);
+              }
+            });
+          }).catch(() => {
+            // If clipboard access fails, just open the dialog
+            openInsertLinkDialog({
+              initialText: selectedText,
+              initialUrl: '',
+              onInsert: (text, url) => {
+                const displayText = text || url;
+                const markdownLink = `[${displayText}](${url})`;
+                
+                if (selection && !Range.isCollapsed(selection)) {
+                  Transforms.delete(editor);
+                  Transforms.insertText(editor, markdownLink);
+                } else {
+                  Transforms.insertText(editor, markdownLink);
+                }
+                
+                ReactEditor.focus(editor);
+              }
+            });
+          });
+        }
       },
-      [submit, setReplyDraft, enterForNewline, autocompleteQuery, isComposing]
+      [submit, setReplyDraft, enterForNewline, autocompleteQuery, isComposing, editor, openInsertLinkDialog]
     );
 
     const handleKeyUp: KeyboardEventHandler = useCallback(

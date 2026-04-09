@@ -189,4 +189,93 @@
     * Заглушка удалённого сообщения: `MessageDeletedContent` в `FallbackContent.tsx` — показывает иконку корзины и текст "This message has been deleted"
     * Кнопка треда: рендерится в `Message.tsx` и остаётся видимой даже для удалённых корневых сообщений
 
+## 11. Исправление отображения сырых Matrix ID вместо имен в сайдбаре
+**Цель:** В списке комнат для некоторых сообщений вместо имени отправителя отображается его Matrix ID (например, @user:domain.com). Это происходит потому, что у объекта события в сайдбаре `event.sender` иногда не инициализирован.
+
+* **Проблема:** Код `const senderName = evt.sender?.name || senderId?.split(':')[0];` при отсутствии `evt.sender?.name` падал в фоллбэк на сырой Matrix ID.
+
+* **Решение:** В `src/app/hooks/useRoomLastMessage.ts` добавлена промежуточная проверка через `room.getMember()` перед использованием сырого ID.
+
+* **Реализация:**
+    ```typescript
+    let senderName = evt.sender?.name;
+
+    // Если имени нет или оно совпадает с сырым ID, ищем через комнату
+    if (!senderName || senderName === senderId) {
+      const member = room?.getMember(senderId);
+      senderName = member?.name || senderId;
+    }
+    ```
+
+* **Как это работает:**
+    | Ситуация | Поведение |
+    |----------|-----------|
+    | `evt.sender?.name` существует | Используется имя из события |
+    | `evt.sender?.name` отсутствует | Пытаемся найти через `room.getMember(senderId)` |
+    | Нигде не найдено | Фоллбэк на `senderId` (сырой Matrix ID) |
+
+* **Результат:** В сайдбаре теперь отображается корректное имя пользователя вместо `@user:domain.com` для всех сообщений, даже если объект события не полностью инициализирован.
+
+## 12. Вставка гиперссылок в редакторе (Cmd+K / Ctrl+K) — как в Telegram
+**Цель:** Добавить возможность вставки Markdown-ссылок через выделение текста + горячую клавишу Cmd+K (Ctrl+K), аналогично поведению в Telegram.
+
+* **Переназначение Quick Search:**
+    * **Файл:** `src/app/features/search/Search.tsx`
+    * **Изменение:** Хоткей открытия быстрого поиска чатов изменен с `Cmd+K` на `Cmd+F`
+    * **Код:** `if (isKeyHotkey('mod+f', event))`
+    * **Причина:** Освободить `Cmd+K` для вставки ссылок, избежать конфликта с браузерным поиском
+
+* **Новые файлы:**
+    * `src/app/features/insert-link-dialog/InsertLinkDialog.tsx` — основной компонент модального окна
+    * `src/app/features/insert-link-dialog/index.ts` — экспорты
+    * `src/app/state/insertLinkDialog.ts` — Jotai atom для управления состоянием диалога
+    * `src/app/state/hooks/insertLinkDialog.ts` — хуки `useOpenInsertLinkDialog`, `useCloseInsertLinkDialog`
+
+* **Структура диалога InsertLinkDialog:**
+    1.  **Заголовок:** "Вставить ссылку"
+    2.  **Поле "Текст":** Текст ссылки (по умолчанию — выделенный текст из редактора)
+    3.  **Поле "Ссылка":** URL (по умолчанию — ссылка из буфера обмена, если валидная)
+    4.  **Кнопки:** "Добавить" (primary) + "Отмена" (secondary)
+    5.  **Горячие клавиши:** `Enter` для вставки, `Escape` для закрытия
+
+* **Переиспользование существующего UI:**
+    * Скопирована структура из `ForwardDialog.tsx`
+    * Стандартные компоненты из библиотеки `folds`: `Modal`, `Overlay`, `Header`, `Input`, `Button`, `Text`
+    * FocusTrap для корректного управления фокусом внутри модалки
+
+* **Интеграция в поле ввода (Message Input):**
+    * **Файл:** `src/app/features/room/RoomInput.tsx`
+    * **Обработчик:** Добавлен в `handleKeyDown` проверку `isKeyHotkey('mod+k', evt)`
+    * **Логика получения данных:**
+        1.  Получает выделенный текст из Slate editor через `Node.string()` + slice по offset
+        2.  Пытается прочитать буфер обмена через `navigator.clipboard.readText()`
+        3.  Проверяет валидность URL: `/^https?:\/\//.test(clipboardText.trim())`
+        4.  Открывает диалог с предзаполненными значениями
+    * **Обработка ошибок буфера:** Если доступ к clipboard запрещен, диалог всё равно открывается (просто без URL по умолчанию)
+
+* **Вставка Markdown:**
+    * **Формат:** `[Текст](URL)` — стандартный Markdown
+    * **Если текст пустой:** Используется URL как отображаемый текст: `[URL](URL)`
+    * **Замена выделения:** `Transforms.delete(editor)` + `Transforms.insertText(editor, markdownLink)`
+    * **Вставка в позицию курсора:** Если текст не выделен, вставляет по текущей позиции
+    * **Возврат фокуса:** `ReactEditor.focus(editor)` после вставки
+
+* **Глобальное подключение:**
+    * `InsertLinkDialogRenderer` добавлен в `Router.tsx` рядом с другими глобальными модальными окнами
+    * Управление через Jotai atom: `useOpenInsertLinkDialog({ initialText, initialUrl, onInsert })`
+
+* **Как это работает (пользовательский сценарий):**
+    1.  Пользователь выделяет текст в поле ввода
+    2.  Нажимает `Cmd+K` (или `Ctrl+K`)
+    3.  Открывается диалог с предзаполненным текстом и URL из буфера
+    4.  Редактирует поля при необходимости
+    5.  Нажимает "Добавить" или `Enter`
+    6.  Markdown-ссылка `[Текст](URL)` вставляется на место выделения
+    7.  Фокус возвращается в редактор
+
+* **Примечания:**
+    * Поддержка как `Cmd+K` (macOS), так и `Ctrl+K` (Windows/Linux) через `isKeyHotkey('mod+k', evt)`
+    * Slate editor требует использования `Node.string()` вместо `Range.text` (не существует в Slate)
+    * Fallback-логика для получения выделенного текста через `editor.fragment(selection)`
+
 ***

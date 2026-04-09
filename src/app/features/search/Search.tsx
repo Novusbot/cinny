@@ -427,7 +427,7 @@ export function SearchModalRenderer() {
     window,
     useCallback(
       (event) => {
-        if (isKeyHotkey('mod+k', event)) {
+        if (isKeyHotkey('mod+f', event)) {
           event.preventDefault();
           if (opened) {
             setOpen(false);
