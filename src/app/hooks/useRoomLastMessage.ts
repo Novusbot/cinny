@@ -59,7 +59,6 @@ export const useRoomLastMessage = (
         // Get sender name for the reaction
         const senderId = evt.getSender();
         const isMe = myUserId ? senderId === myUserId : false;
-        const senderName = isMe ? 'Вы' : (evt.sender?.name || senderId?.split(':')[0] || senderId);
         const verb = isMe ? 'отреагировали' : 'отреагировал(а)';
 
         // Try to find the original event in room cache
@@ -76,7 +75,7 @@ export const useRoomLastMessage = (
           }
         }
 
-        return `${senderName} ${verb} ${emoji} на ${targetText}`;
+        return `${verb} ${emoji} на ${targetText}`;
       }
       return 'Отреагировал(а) на сообщение';
     }
