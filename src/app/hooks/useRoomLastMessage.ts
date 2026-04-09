@@ -23,13 +23,63 @@ export const useRoomLastMessage = (
 ): LastMessageInfo | undefined => {
   const [lastMessage, setLastMessage] = useState<LastMessageInfo>();
 
+  // Helper to extract text from a target event (handling encryption)
+  const getTargetEventText = useCallback((targetEvent: MatrixEvent | null): string => {
+    if (!targetEvent) return '""message""';
+
+    const content = targetEvent.getContent();
+    const clearContent = typeof targetEvent.getClearContent === 'function'
+      ? targetEvent.getClearContent()
+      : null;
+    const body = clearContent?.body || content?.body;
+
+    if (!body) return '""message""';
+
+    // Sanitize: replace newlines with spaces
+    return body.replace(/\n/g, ' ');
+  }, []);
+
   const getTextFromEvent = useCallback((evt: MatrixEvent): string | undefined => {
     const content = evt.getContent();
     const msgType = content.msgtype;
+    const type = evt.getType();
 
     // Try to get decrypted content first
     const clearContent = typeof evt.getClearContent === 'function' ? evt.getClearContent() : null;
     const body = clearContent?.body || content?.body;
+
+    // Handle reactions
+    if (type === MessageEvent.Reaction) {
+      const relation = content['m.relates_to'];
+
+      if (relation && relation.rel_type === 'm.annotation') {
+        const emoji = relation.key;
+        const targetEventId = relation.event_id;
+
+        // Get sender name for the reaction
+        const senderId = evt.getSender();
+        const isMe = myUserId ? senderId === myUserId : false;
+        const senderName = isMe ? 'Вы' : (evt.sender?.name || senderId?.split(':')[0] || senderId);
+        const verb = isMe ? 'отреагировали' : 'отреагировал(а)';
+
+        // Try to find the original event in room cache
+        let targetText = 'сообщение';
+        if (room && targetEventId) {
+          const targetEvent = room.findEventById(targetEventId);
+          if (targetEvent) {
+            // Use the helper to extract text from the target event
+            const originalText = getTargetEventText(targetEvent);
+            // Trim if too long
+            targetText = originalText.length > 50
+              ? `${originalText.substring(0, 50)}...`
+              : originalText;
+          }
+        }
+
+        return `${senderName} ${verb} ${emoji} на ${targetText}`;
+      }
+      return 'Отреагировал(а) на сообщение';
+    }
 
     if (!body) return undefined;
 
@@ -55,23 +105,7 @@ export const useRoomLastMessage = (
     } else {
       return body;
     }
-  }, []);
-
-  // Helper to extract text from a target event (handling encryption)
-  const getTargetEventText = useCallback((targetEvent: MatrixEvent | null): string => {
-    if (!targetEvent) return '""message""';
-
-    const content = targetEvent.getContent();
-    const clearContent = typeof targetEvent.getClearContent === 'function' 
-      ? targetEvent.getClearContent() 
-      : null;
-    const body = clearContent?.body || content?.body;
-
-    if (!body) return '""message""';
-
-    // Sanitize: replace newlines with spaces
-    return body.replace(/\n/g, ' ');
-  }, []);
+  }, [myUserId, room, getTargetEventText]);
 
   const getLastMessageInfo = useCallback((): LastMessageInfo | undefined => {
     // Получаем закэшированные события — сначала из live timeline, фоллбэк на сырой timeline
@@ -94,7 +128,8 @@ export const useRoomLastMessage = (
       if (
         type !== MessageEvent.RoomMessage &&
         type !== MessageEvent.RoomMessageEncrypted &&
-        type !== 'm.sticker'
+        type !== 'm.sticker' &&
+        type !== MessageEvent.Reaction
       ) {
         continue;
       }
