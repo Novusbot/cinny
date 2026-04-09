@@ -420,8 +420,8 @@ export function Space() {
       [space.roomId, closedCategories, roomToUnread, selectedRoomId, callEmbed]
     ),
     useCallback(
-      (sId) => closedCategories.has(makeNavCategoryId(space.roomId, sId)),
-      [closedCategories, space.roomId]
+      () => true,
+      []
     )
   );
 

@@ -18,7 +18,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAtom, useAtomValue } from 'jotai';
 import FocusTrap from 'focus-trap-react';
-import { factoryRoomIdByActivity, factoryRoomIdByAtoZ } from '../../../utils/sort';
+import { factoryRoomIdByActivity } from '../../../utils/sort';
 import {
   NavButton,
   NavCategory,
@@ -222,13 +222,9 @@ export function Home() {
     return items;
   }, [mx, dmRooms, closedCategories, roomToUnread, selectedRoomId]);
 
-  // Group rooms: sorted A-Z or by activity, filtered when collapsed
+  // Group rooms: sorted chronologically by activity
   const sortedRooms = useMemo(() => {
-    const items = Array.from(rooms).sort(
-      closedCategories.has(DEFAULT_CATEGORY_ID)
-        ? factoryRoomIdByActivity(mx)
-        : factoryRoomIdByAtoZ(mx)
-    );
+    const items = Array.from(rooms).sort(factoryRoomIdByActivity(mx));
     if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
     }
