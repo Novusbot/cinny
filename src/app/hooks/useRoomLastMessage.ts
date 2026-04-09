@@ -141,8 +141,15 @@ export const useRoomLastMessage = (
       const senderId = evt.getSender();
       const isMe = myUserId ? senderId === myUserId : false;
 
-      // Get sender name
-      const senderName = evt.sender?.name || senderId?.split(':')[0];
+      // Get sender name with improved fallback logic
+      // First try event sender, then room member, finally fall back to raw ID
+      let senderName = evt.sender?.name;
+
+      // If name is missing or equals the raw ID, try to get it from room state
+      if (!senderName || senderName === senderId) {
+        const member = room?.getMember(senderId);
+        senderName = member?.name || senderId;
+      }
 
       // Get sender avatar URL
       let senderAvatarUrl: string | null = null;
