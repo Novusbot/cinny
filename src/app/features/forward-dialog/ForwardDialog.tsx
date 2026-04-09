@@ -160,9 +160,10 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
           const messageLink = `https://matrix.to/#/${originalRoomId}/${originalEventId}`;
 
           // Text and HTML versions of the header
-          const forwardText = `Переслано от ${senderName} из ${roomName}\n\n`;
+          const forwardText = `Переслано от ${senderName} из ${roomName}\n`;
           // Ссылка на название комнаты (ведет на оригинальное сообщение)
-          const forwardHtml = `<em>Переслано от ${senderName} из <a href="${messageLink}">${roomName}</a></em><br/><br/>`;
+          // Using <font> tag for Matrix compatibility (style attribute not allowed)
+          const forwardHtml = `<font size="2" color="#888888"><em>Переслано от ${senderName} из <a href="${messageLink}">${roomName}</a></em></font><br/>`;
 
           // Preserve original text
           const originalBody = content.body || '';
