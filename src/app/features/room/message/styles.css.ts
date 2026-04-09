@@ -55,3 +55,27 @@ export const ReactionsContainer = style({
 export const ReactionsTooltipText = style({
   wordBreak: 'break-word',
 });
+
+export const ThreadSummaryButton = style({
+  maxWidth: '400px',
+  width: 'max-content',
+  marginTop: config.space.S100,
+});
+
+export const ThreadSummaryContent = style({
+  width: '100%',
+  overflow: 'hidden',
+});
+
+export const ThreadSummaryPreviewText = style({
+  flexShrink: 1,
+  minWidth: 0,
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+});
+
+export const ThreadSummaryAvatarBase = style({
+  paddingTop: 0,
+  flexShrink: 0,
+});

@@ -51,6 +51,7 @@ import {
   getEventEdits,
   getMemberAvatarMxc,
   getMemberDisplayName,
+  trimReplyFromBody,
 } from '../../../utils/room';
 import {
   getCanonicalAliasOrRoomId,
@@ -823,7 +824,8 @@ export const Message = as<'div', MessageProps>(
     // Count replies from live timeline since SDK thread object may be empty
     const mEventId = mEvent.getId();
     const allEvents = room.getLiveTimeline().getEvents();
-    const replyCount = mEventId ? allEvents.filter((e) => e.threadRootId === mEventId).length : 0;
+    const threadReplies = mEventId ? allEvents.filter((e) => e.threadRootId === mEventId) : [];
+    const replyCount = threadReplies.length;
     const isThreadRoot = replyCount > 0 && !isThreadedMessage;
 
     const handleThreadClick: MouseEventHandler<HTMLButtonElement> = useCallback(() => {
@@ -834,6 +836,16 @@ export const Message = as<'div', MessageProps>(
       }
     }, [setActiveThread, mEvent]);
 
+    // Get last reply information for preview
+    const lastReply = threadReplies.length > 0 ? threadReplies[threadReplies.length - 1] : null;
+    const lastReplySender = lastReply?.getSender();
+    const lastReplyDisplayName = lastReplySender
+      ? getMemberDisplayName(room, lastReplySender) ?? getMxIdLocalPart(lastReplySender) ?? lastReplySender
+      : '';
+    const lastReplyContent = lastReply?.getContent()?.body ?? '';
+    const trimmedLastReply = lastReplyContent ? trimReplyFromBody(lastReplyContent) : '';
+    const lastReplyAvatarMxc = lastReplySender ? getMemberAvatarMxc(room, lastReplySender) : null;
+
     const repliesButtonJSX = isThreadRoot ? (
       <Button
         size="300"
@@ -841,11 +853,51 @@ export const Message = as<'div', MessageProps>(
         fill="None"
         radii="Pill"
         outlined
-        style={{ marginTop: config.space.S100 }}
+        className={css.ThreadSummaryButton}
         onClick={handleThreadClick}
-        before={<Icon size="50" src={Icons.Thread} />}
       >
-        <Text size="T300">{replyCount} replies</Text>
+        <Box 
+          gap="200" 
+          alignItems="Center" 
+          className={css.ThreadSummaryContent}
+        >
+          <Box shrink="No" gap="100" alignItems="Center" direction="Row">
+            <Icon size="50" src={Icons.Thread} />
+            <Text size="T300">{replyCount} {replyCount === 1 ? 'reply' : 'replies'}</Text>
+          </Box>
+          {lastReply && lastReplySender && (
+            <>
+              <Box shrink="No" style={{ opacity: config.opacity.P300 }}>
+                <Text size="T200">·</Text>
+              </Box>
+              <AvatarBase className={css.ThreadSummaryAvatarBase}>
+                <Avatar
+                  size="200"
+                  style={{ cursor: 'default' }}
+                >
+                  <UserAvatar
+                    userId={lastReplySender}
+                    src={
+                      lastReplyAvatarMxc
+                        ? mxcUrlToHttp(mx, lastReplyAvatarMxc, useAuthentication, 32, 32, 'crop') ?? undefined
+                        : undefined
+                    }
+                    alt={lastReplyDisplayName}
+                    renderFallback={() => <Icon size="100" src={Icons.User} filled />}
+                  />
+                </Avatar>
+              </AvatarBase>
+              <Text
+                size="T300"
+                truncate
+                className={css.ThreadSummaryPreviewText}
+              >
+                <b>{lastReplyDisplayName}</b>
+                {trimmedLastReply ? `: ${trimmedLastReply}` : ''}
+              </Text>
+            </>
+          )}
+        </Box>
       </Button>
     ) : null;
 
