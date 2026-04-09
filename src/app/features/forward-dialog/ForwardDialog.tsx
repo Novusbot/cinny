@@ -162,8 +162,8 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
           // Text and HTML versions of the header
           const forwardText = `Переслано от ${senderName} из ${roomName}\n`;
           // Ссылка на название комнаты (ведет на оригинальное сообщение)
-          // Using <font> tag for Matrix compatibility (style attribute not allowed)
-          const forwardHtml = `<font size="2" color="#888888"><em>Переслано от ${senderName} из <a href="${messageLink}">${roomName}</a></em></font><br/>`;
+          // Using <sup>+<font> for tiny superscript styling (Matrix-compatible, no style attribute)
+          const forwardHtml = `<sup><font color="#888888"><em>Переслано от:</em> ${senderName} <em>из <a href="${messageLink}">${roomName}</a></em></font></sup><br/>`;
 
           // Preserve original text
           const originalBody = content.body || '';
