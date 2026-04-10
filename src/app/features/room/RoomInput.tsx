@@ -286,24 +286,62 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     };
 
     const handleSendUpload = async (uploads: UploadSuccess[]) => {
+      // Determine the thread ID for proper local echo routing
+      const threadId = replyDraft?.relation?.rel_type === RelationType.Thread
+        ? replyDraft.relation.event_id
+        : activeThread;
+
       const contentsPromises = uploads.map(async (upload) => {
         const fileItem = selectedFiles.find((f) => f.file === upload.file);
         if (!fileItem) throw new Error('Broken upload');
 
+        let content: IContent;
         if (fileItem.file.type.startsWith('image')) {
-          return getImageMsgContent(mx, fileItem, upload.mxc);
+          content = await getImageMsgContent(mx, fileItem, upload.mxc);
+        } else if (fileItem.file.type.startsWith('video')) {
+          content = await getVideoMsgContent(mx, fileItem, upload.mxc);
+        } else if (fileItem.file.type.startsWith('audio')) {
+          content = await getAudioMsgContent(fileItem, upload.mxc);
+        } else {
+          content = getFileMsgContent(fileItem, upload.mxc);
         }
-        if (fileItem.file.type.startsWith('video')) {
-          return getVideoMsgContent(mx, fileItem, upload.mxc);
+
+        // Add reply or thread relation if applicable
+        if (replyDraft) {
+          content['m.relates_to'] = {
+            'm.in_reply_to': {
+              event_id: replyDraft.eventId,
+            },
+          };
+          // If replying within a thread, upgrade to a full thread relation
+          if (replyDraft.relation?.rel_type === RelationType.Thread) {
+            content['m.relates_to'].event_id = replyDraft.relation.event_id;
+            content['m.relates_to'].rel_type = RelationType.Thread;
+            content['m.relates_to'].is_falling_back = false;
+          }
+        } else if (activeThread) {
+          // Automatically add thread relation when viewing a thread
+          content['m.relates_to'] = {
+            rel_type: RelationType.Thread,
+            event_id: activeThread,
+            is_falling_back: true,
+          };
         }
-        if (fileItem.file.type.startsWith('audio')) {
-          return getAudioMsgContent(fileItem, upload.mxc);
-        }
-        return getFileMsgContent(fileItem, upload.mxc);
+
+        return content;
       });
       handleCancelUpload(uploads);
       const contents = fulfilledPromiseSettledResult(await Promise.allSettled(contentsPromises));
-      contents.forEach((content) => mx.sendMessage(roomId, content as any));
+
+      // Send each file message with proper thread context for local echo
+      contents.forEach((content) => {
+        if (threadId) {
+          // Pass threadId to sendMessage for proper local echo routing
+          mx.sendMessage(roomId, threadId, content as any);
+        } else {
+          mx.sendMessage(roomId, content as any);
+        }
+      });
     };
 
     const submit = useCallback(() => {
@@ -370,6 +408,12 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         content.format = 'org.matrix.custom.html';
         content.formatted_body = formattedBody;
       }
+      
+      // Determine the thread ID for proper local echo routing
+      const threadId = replyDraft?.relation?.rel_type === RelationType.Thread
+        ? replyDraft.relation.event_id
+        : activeThread;
+      
       if (replyDraft) {
         content['m.relates_to'] = {
           'm.in_reply_to': {
@@ -389,7 +433,14 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           is_falling_back: true,
         };
       }
-      mx.sendMessage(roomId, content as any);
+
+      // Send with proper thread context for local echo
+      if (threadId) {
+        mx.sendMessage(roomId, threadId, content as any);
+      } else {
+        mx.sendMessage(roomId, content as any);
+      }
+      
       resetEditor(editor);
       resetEditorHistory(editor);
       setReplyDraft(undefined);

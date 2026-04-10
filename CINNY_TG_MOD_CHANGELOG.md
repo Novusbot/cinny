@@ -278,4 +278,101 @@
     * Slate editor требует использования `Node.string()` вместо `Range.text` (не существует в Slate)
     * Fallback-логика для получения выделенного текста через `editor.fragment(selection)`
 
+## 13. Исправление отправки файлов в треды — файлы падали в корень комнаты
+**Цель:** Файлы (изображения, видео, аудио, документы), отправленные из UI треда, должны привязываться к треду, а не улетать в корень комнаты.
+
+* **Проблема:** При отправке текстового сообщения из треда к нему корректно добавлялся `m.relates_to` с `rel_type: 'm.thread'`. Однако пайплайн отправки файлов формировал `m.room.message` (msgtype: `"m.image"`) без `m.relates_to`, из-за чего файл появлялся в корневом чате комнаты.
+
+* **Решение:** В функцию `handleSendUpload` в `RoomInput.tsx` добавлена логика формирования `m.relates_to`, идентичная логике отправки текста:
+    * Если активен `replyDraft` с thread-отношением → полная thread-привязка (`is_falling_back: false`)
+    * Если активен `activeThread` (пользователь просматривает тред) → автоматическая thread-привязка (`is_falling_back: true`)
+
+* **Реализация (`src/app/features/room/RoomInput.tsx`):**
+    ```typescript
+    // В handleSendUpload, после формирования content файла:
+    if (replyDraft) {
+      content['m.relates_to'] = { 'm.in_reply_to': { event_id: replyDraft.eventId } };
+      if (replyDraft.relation?.rel_type === RelationType.Thread) {
+        content['m.relates_to'].event_id = replyDraft.relation.event_id;
+        content['m.relates_to'].rel_type = RelationType.Thread;
+        content['m.relates_to'].is_falling_back = false;
+      }
+    } else if (activeThread) {
+      content['m.relates_to'] = {
+        rel_type: RelationType.Thread,
+        event_id: activeThread,
+        is_falling_back: true,
+      };
+    }
+    ```
+
+* **Как это работает:**
+    | Ситуация | Поведение |
+    |----------|-----------|
+    | Отправка файла в открытом треде | Файл привязывается к треду (`is_falling_back: true`) |
+    | Reply in Thread + файл | Файл привязывается к треду через replyDraft (`is_falling_back: false`) |
+    | Ответ на сообщение (без треда) | Файл получает `m.in_reply_to` |
+    | Обычная отправка (не тред) | Без `m.relates_to` (как раньше) |
+
+* **Поддерживаемые типы файлов:** `m.image`, `m.video`, `m.audio`, `m.file` — все типы файлов теперь корректно привязываются к треду.
+
+## 14. Восстановление Local Echo (мгновенного отображения) для сообщений и файлов в тредах
+**Цель:** Сообщения и файлы, отправленные в тред, должны мгновенно появляться в UI треда с анимацией отправки (Local Echo), без необходимости перезагрузки страницы.
+
+* **Проблема 1 (SDK-уровень):** `mx.sendMessage(roomId, content)` без указания `threadId` отправлял сообщение корректно, но SDK не мог маршрутизировать Local Echo в объект Thread — событие попадало в общий таймлайн комнаты, а не в таймлайн треда.
+
+* **Проблема 2 (UI-уровень):** Компонент `ThreadTimeline` не имел подписки на события комнаты (`RoomEvent.Timeline`, `RoomEvent.LocalEchoUpdated`) и не перерисовывался при появлении новых событий. В отличие от `RoomTimeline`, который слушал эти события и обновлял диапазон рендеринга.
+
+* **Решение (2 части):**
+
+    **Часть A — SDK-уровень (`RoomInput.tsx`):** Передача `threadId` вторым параметром в `mx.sendMessage()`:
+    ```typescript
+    // Определение threadId для локального эха
+    const threadId = replyDraft?.relation?.rel_type === RelationType.Thread
+      ? replyDraft.relation.event_id
+      : activeThread;
+
+    // Отправка с правильным threadId
+    if (threadId) {
+      mx.sendMessage(roomId, threadId, content);
+    } else {
+      mx.sendMessage(roomId, content);
+    }
+    ```
+    Применено в обеих функциях отправки: `handleSendUpload` (файлы) и `submit` (текст).
+
+    **Часть B — UI-уровень (`ThreadTimeline.tsx`):** Добавлены подписки на события комнаты, аналогично `RoomTimeline`:
+    ```typescript
+    // Подписка на новые события (включая локальные эхо)
+    room.on(RoomEvent.Timeline, handleTimelineEvent);
+    // Подписка на замену локального ID на серверный
+    room.on(RoomEvent.LocalEchoUpdated, handleLocalEchoUpdated);
+    ```
+
+    Фильтрация событий: компонент реагирует только на события, относящиеся к текущему треду (`relation.rel_type === 'm.thread' && relation.event_id === rootEventId`).
+
+* **Реализация (`src/app/features/room/ThreadTimeline.tsx`):**
+    * Добавлен `useState` счётчик для принудительного ре-рендера при поступлении событий
+    * Добавлен `useCallback` для фильтрации событий по принадлежности к треду
+    * Добавлен `useEffect` с подпиской на `RoomEvent.Timeline` и `RoomEvent.LocalEchoUpdated`
+    * Корректная очистка слушателей при размонтировании компонента
+
+* **Как это работает:**
+    | Этап | Что происходит |
+    |------|----------------|
+    | 1. Пользователь отправляет сообщение/файл | SDK создаёт Local Echo с временным ID |
+    | 2. `RoomEvent.Timeline` срабатывает | `ThreadTimeline` фильтрует → ре-рендер → сообщение появляется мгновенно |
+    | 3. Сервер подтверждает получение | `RoomEvent.LocalEchoUpdated` — временный ID заменяется на серверный |
+    | 4. `ThreadTimeline` обновляется | Отображение с серверным ID, анимация "отправлено" |
+    | 5. Ошибка отправки | Local Echo обновляется статусом ошибки |
+
+* **Файлы:**
+    * `src/app/features/room/RoomInput.tsx` — передача `threadId` в `sendMessage()`
+    * `src/app/features/room/ThreadTimeline.tsx` — подписки на `RoomEvent.Timeline` и `RoomEvent.LocalEchoUpdated`
+
+* **Примечания:**
+    * matrix-js-sdk v38.2.0 поддерживает сигнатуру `sendMessage(roomId, threadId, content)` из коробки
+    * При `PendingEventOrdering.Chronological` (по умолчанию) локальные эхо автоматически вставляются в live-таймлайн комнаты
+    * `threadRootId` на событиях локального эха устанавливается корректно благодаря передаче `threadId` в SDK
+
 

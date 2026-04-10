@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Box, config, color } from 'folds';
 import { MatrixEvent, Room } from 'matrix-js-sdk';
 import { Message, Reactions } from '../room/message';
@@ -23,7 +23,7 @@ import { roomToParentsAtom } from '../../state/room/roomToParents';
 import { useAtomValue } from 'jotai';
 import { getEventReactions, getEditedEvent } from '../../utils/room';
 import { Reply } from '../../components/message/Reply';
-import { EventType } from 'matrix-js-sdk';
+import { EventType, RoomEvent, EventTimelineSetHandlerMap, RoomEventHandlerMap } from 'matrix-js-sdk';
 
 type ThreadTimelineProps = {
   room: Room;
@@ -61,6 +61,57 @@ export function ThreadTimeline({ room, rootEventId }: ThreadTimelineProps) {
   const accessibleTagColors = useAccessiblePowerTagColors(theme.kind, creatorsTag, powerLevelTags);
   const roomToParents = useAtomValue(roomToParentsAtom);
   const imagePackRooms = useImagePackRooms(room.roomId, roomToParents);
+
+  // State to trigger re-renders when new events arrive (for local echo support)
+  const [, setEventUpdateCounter] = useState(0);
+
+  // Subscribe to timeline events to support local echo in threads
+  // This mirrors the RoomTimeline's useLiveEventArrive pattern
+  const handleThreadEvent = useCallback(
+    (mEvent: MatrixEvent) => {
+      // Only trigger re-render if this event belongs to our thread
+      const relation = mEvent.getRelation?.();
+      const isThreadReply = relation?.rel_type === 'm.thread' && relation?.event_id === rootEventId;
+      const isThreadRoot = mEvent.getId() === rootEventId;
+      
+      if (isThreadReply || isThreadRoot) {
+        // Force re-render by updating counter
+        setEventUpdateCounter((prev) => prev + 1);
+      }
+    },
+    [rootEventId]
+  );
+
+  useEffect(() => {
+    // Listen for new timeline events (including local echoes)
+    const handleTimelineEvent: EventTimelineSetHandlerMap[RoomEvent.Timeline] = (
+      mEvent,
+      eventRoom,
+      _toStartOfTimeline,
+      _removed,
+      data
+    ) => {
+      if (eventRoom?.roomId !== room.roomId || !data.liveEvent) return;
+      handleThreadEvent(mEvent);
+    };
+
+    // Listen for local echo updates (when local ID is replaced with server ID)
+    const handleLocalEchoUpdated: RoomEventHandlerMap[RoomEvent.LocalEchoUpdated] = (
+      mEvent,
+      eventRoom
+    ) => {
+      if (eventRoom?.roomId !== room.roomId) return;
+      handleThreadEvent(mEvent);
+    };
+
+    room.on(RoomEvent.Timeline, handleTimelineEvent);
+    room.on(RoomEvent.LocalEchoUpdated, handleLocalEchoUpdated);
+
+    return () => {
+      room.removeListener(RoomEvent.Timeline, handleTimelineEvent);
+      room.removeListener(RoomEvent.LocalEchoUpdated, handleLocalEchoUpdated);
+    };
+  }, [room, rootEventId, handleThreadEvent]);
 
   // Get all events from live timeline
   const allEvents = room.getLiveTimeline().getEvents();
