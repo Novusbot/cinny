@@ -26,15 +26,29 @@ import FocusTrap from 'focus-trap-react';
 import { isKeyHotkey } from 'is-hotkey';
 import { useCloseInsertLinkDialog, useInsertLinkDialogState } from '../../state/hooks/insertLinkDialog';
 import { stopPropagation } from '../../utils/keyboard';
+import { useDialogStack } from '../../hooks/useDialogStack';
 
 export function InsertLinkDialog() {
   const dialogState = useInsertLinkDialogState();
   const closeDialog = useCloseInsertLinkDialog();
   const textInputRef = useRef<HTMLInputElement>(null);
   const urlInputRef = useRef<HTMLInputElement>(null);
+  const dialogStack = useDialogStack();
 
   const [text, setText] = useState(dialogState?.initialText || '');
   const [url, setUrl] = useState(dialogState?.initialUrl || '');
+
+  // Register this dialog in the global navigation stack
+  useEffect(() => {
+    dialogStack.mount();
+    return () => dialogStack.unmount();
+  }, [dialogStack]);
+
+  // Wrapper for closeDialog to log all close attempts
+  const handleRequestClose = useCallback(() => {
+    console.log('[NavDebug] [InsertLinkDialog] handleRequestClose triggered (close dialog)');
+    closeDialog();
+  }, [closeDialog]);
 
   // Auto-focus URL field if text is already filled
   useEffect(() => {
@@ -44,6 +58,21 @@ export function InsertLinkDialog() {
       textInputRef.current.focus();
     }
   }, []);
+
+  // Root-level ESC handler to catch ESC even when focus is not in input fields
+  // This prevents event bubbling to Room.tsx global handler
+  const handleRootKeyDown: KeyboardEventHandler<HTMLDivElement> = (evt) => {
+    if (isKeyHotkey('escape', evt)) {
+      console.log('[NavDebug] [InsertLinkDialog] Escape caught at root Overlay level');
+      // ЖЕСТКО блокируем всплытие события до Room.tsx / window
+      evt.stopPropagation();
+      if (evt.nativeEvent && evt.nativeEvent.stopImmediatePropagation) {
+        evt.nativeEvent.stopImmediatePropagation();
+      }
+      console.log('[NavDebug] [InsertLinkDialog] ESC propagation stopped at root');
+      handleRequestClose();
+    }
+  };
 
   const handleTextChange: ChangeEventHandler<HTMLInputElement> = (evt) => {
     setText(evt.currentTarget.value);
@@ -55,7 +84,15 @@ export function InsertLinkDialog() {
 
   const handleKeyDown: KeyboardEventHandler<HTMLInputElement> = (evt) => {
     if (isKeyHotkey('escape', evt)) {
-      closeDialog();
+      console.log('[NavDebug] [InsertLinkDialog] Escape key pressed in input field');
+      // ЖЕСТКО блокируем всплытие события до Room.tsx / window
+      evt.stopPropagation();
+      if (evt.nativeEvent && evt.nativeEvent.stopImmediatePropagation) {
+        evt.nativeEvent.stopImmediatePropagation();
+      }
+      console.log('[NavDebug] [InsertLinkDialog] ESC propagation stopped');
+      handleRequestClose();
+      return;
     }
     if (isKeyHotkey('enter', evt)) {
       evt.preventDefault();
@@ -66,9 +103,14 @@ export function InsertLinkDialog() {
   const handleInsert = useCallback(() => {
     if (!url.trim()) {
       // Don't allow inserting without URL
+      console.log('[NavDebug] [InsertLinkDialog] Insert blocked - URL is empty');
       return;
     }
 
+    console.log('[NavDebug] [InsertLinkDialog] Inserting link and closing dialog', {
+      text: text.trim(),
+      url: url.trim()
+    });
     if (dialogState?.onInsert) {
       dialogState.onInsert(text.trim(), url.trim());
     }
@@ -78,17 +120,20 @@ export function InsertLinkDialog() {
   if (!dialogState) return null;
 
   return (
-    <Overlay open backdrop={<OverlayBackdrop />}>
+    <Overlay open backdrop={<OverlayBackdrop />} onKeyDown={handleRootKeyDown}>
       <OverlayCenter>
         <FocusTrap
           focusTrapOptions={{
             initialFocus: () => textInputRef.current,
             clickOutsideDeactivates: true,
-            onDeactivate: closeDialog,
+            onDeactivate: () => {
+              console.log('[NavDebug] [InsertLinkDialog] FocusTrap onDeactivate triggered (click outside or programmatic close)');
+              handleRequestClose();
+            },
             escapeDeactivates: stopPropagation,
           }}
         >
-          <Modal size="400" style={{ borderRadius: config.radii.R500 }}>
+          <Modal id="cinny-insert-link-dialog" size="400" style={{ borderRadius: config.radii.R500 }}>
             {/* Header */}
             <Header
               size="500"
@@ -100,7 +145,7 @@ export function InsertLinkDialog() {
                 </Text>
               </Box>
               <Box shrink="No">
-                <IconButton size="300" radii="300" onClick={closeDialog}>
+                <IconButton size="300" radii="300" onClick={handleRequestClose}>
                   <Icon src={Icons.Cross} />
                 </IconButton>
               </Box>
@@ -159,7 +204,7 @@ export function InsertLinkDialog() {
                   variant="Secondary"
                   fill="None"
                   radii="400"
-                  onClick={closeDialog}
+                  onClick={handleRequestClose}
                 >
                   <Text size="B300">Отмена</Text>
                 </Button>

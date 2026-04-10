@@ -21,13 +21,14 @@ import { CallChatView } from './CallChatView';
 import { getHomePath } from '../../pages/pathUtils';
 import { useMacNavigation } from '../../hooks/useMacNavigation';
 import { useActiveThread, useSetActiveThread } from '../../state/hooks/activeThread';
-import { hasOpenDialog, tryCloseTopDialog } from '../../utils/dialog';
+import { hasOpenDialogsAtom } from '../../state/navigationStack';
 
 export function Room() {
   const { eventId } = useParams();
   const room = useRoom();
   const mx = useMatrixClient();
   const navigate = useNavigate();
+  const hasOpenDialogs = useAtomValue(hasOpenDialogsAtom);
 
   const [isDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
@@ -62,24 +63,37 @@ export function Room() {
     useCallback(
       (evt) => {
         if (isKeyHotkey('escape', evt)) {
-          // Priority 1: Check if any modal dialogs are open (InsertLinkDialog, ForwardDialog, etc.)
-          // If yes, close them instead of navigating away from thread/room
-          if (hasOpenDialog()) {
-            tryCloseTopDialog();
+          console.log('[NavDebug] [ESC] Room.tsx caught Escape keypress', {
+            activeElement: {
+              tag: document.activeElement?.tagName,
+              className: document.activeElement?.className?.substring(0, 50)
+            },
+            activeThread: activeThreadRef.current,
+            hasOpenDialogs
+          });
+
+          // Priority 1: Modal dialogs (declarative state check)
+          if (hasOpenDialogs) {
+            console.log('[NavDebug] [ESC] Dialog detected (state > 0). Dialog will close itself via its own handler.');
+            // Don't dispatch Escape here - the dialog's own ESC handler will catch it
+            // because we have stopPropagation() in the dialog component
+            console.log('[NavDebug] [ESC] Navigation intercepted - waiting for dialog to close');
             return; // Consume the ESC - don't proceed to thread/room navigation
           }
 
           // Priority 2: If thread is open, close it
           if (activeThreadRef.current !== null) {
+            console.log('[NavDebug] [ESC] No dialogs. Thread active. Closing thread.');
             setActiveThread(null);
             return;
           }
           // Priority 3: Otherwise, navigate home
+          console.log('[NavDebug] [ESC] No dialogs, no thread. Closing room (Navigating home).');
           markAsRead(mx, room.roomId, hideActivity);
           navigate(getHomePath(), { replace: false });
         }
       },
-      [mx, room.roomId, hideActivity, navigate, setActiveThread]
+      [mx, room.roomId, hideActivity, navigate, setActiveThread, hasOpenDialogs]
     )
   );
 

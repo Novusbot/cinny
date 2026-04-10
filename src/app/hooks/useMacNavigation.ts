@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAtomValue } from 'jotai';
 import { getHomePath } from '../pages/pathUtils';
-import { hasOpenDialog, tryCloseTopDialog } from '../utils/dialog';
+import { hasOpenDialogsAtom } from '../state/navigationStack';
 
 const SWIPE_DEBOUNCE_MS = 1000; // 1 second cooldown to prevent double-triggering
 const SWIPE_DELTA_X_THRESHOLD = -40;
@@ -20,6 +21,7 @@ const SWIPE_DELTA_Y_THRESHOLD = 10;
 export const useMacNavigation = (onSwipeRight?: () => boolean) => {
   const navigate = useNavigate();
   const swipeDebounceRef = useRef<number | null>(null);
+  const hasOpenDialogs = useAtomValue(hasOpenDialogsAtom);
 
   const handleNavigateHome = useCallback(() => {
     navigate(getHomePath(), { replace: false });
@@ -33,7 +35,20 @@ export const useMacNavigation = (onSwipeRight?: () => boolean) => {
         Math.abs(event.deltaY) < SWIPE_DELTA_Y_THRESHOLD
       ) {
         // Debounce: prevent multiple triggers from the same swipe gesture
-        if (swipeDebounceRef.current !== null) return;
+        if (swipeDebounceRef.current !== null) {
+          console.log('[NavDebug] [Swipe] Swipe ignored - debounce active');
+          return;
+        }
+
+        console.log('[NavDebug] [Swipe] handleNavigateBack triggered via: wheel', {
+          deltaX: event.deltaX,
+          deltaY: event.deltaY,
+          hasOpenDialogs,
+          activeElement: {
+            tag: document.activeElement?.tagName,
+            className: document.activeElement?.className?.substring(0, 50)
+          }
+        });
 
         // Set cooldown IMMEDIATELY to block all subsequent wheel events
         // from this same physical swipe gesture
@@ -41,25 +56,36 @@ export const useMacNavigation = (onSwipeRight?: () => boolean) => {
           swipeDebounceRef.current = null;
         }, SWIPE_DEBOUNCE_MS);
 
-        // UNIVERSAL CHECK (Level 1: Modals/Dialogs)
-        // Check if any modal dialogs are open (InsertLinkDialog, ForwardDialog, etc.)
-        // If yes, close them instead of navigating away from thread/room
-        if (hasOpenDialog()) {
-          // Simulate Escape key to close the topmost modal
-          tryCloseTopDialog();
+        // Level 1: Modal dialogs (declarative state check)
+        if (hasOpenDialogs) {
+          console.log('[NavDebug] [Swipe] Dialog detected (state > 0). Dispatching Escape to close dialog.');
+          // Dispatch Escape to close the topmost dialog
+          // The dialog's own FocusTrap/handlers will intercept and close it
+          document.dispatchEvent(
+            new KeyboardEvent('keydown', {
+              key: 'Escape',
+              code: 'Escape',
+              keyCode: 27,
+              which: 27,
+              bubbles: true,
+            })
+          );
+          console.log('[NavDebug] [Swipe] Navigation intercepted - dialog close attempted');
           return; // Consume the swipe - don't proceed to thread/room navigation
         }
 
-        // Check if swipe was consumed (e.g., closing a thread)
+        // Level 2: Thread check (callback from Room.tsx)
         if (onSwipeRight?.()) {
+          console.log('[NavDebug] [Swipe] No dialogs. Thread active. Closing thread.');
           return; // Swipe consumed, don't navigate home
         }
 
-        // If not consumed, navigate home (Level 3: Room)
+        // Level 3: Room navigation (home)
+        console.log('[NavDebug] [Swipe] No dialogs, no thread. Closing room (Navigating home).');
         handleNavigateHome();
       }
     },
-    [handleNavigateHome, onSwipeRight]
+    [handleNavigateHome, onSwipeRight, hasOpenDialogs]
   );
 
   useEffect(() => {
