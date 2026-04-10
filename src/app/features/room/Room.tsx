@@ -63,32 +63,19 @@ export function Room() {
     useCallback(
       (evt) => {
         if (isKeyHotkey('escape', evt)) {
-          console.log('[NavDebug] [ESC] Room.tsx caught Escape keypress', {
-            activeElement: {
-              tag: document.activeElement?.tagName,
-              className: document.activeElement?.className?.substring(0, 50)
-            },
-            activeThread: activeThreadRef.current,
-            hasOpenDialogs
-          });
-
           // Priority 1: Modal dialogs (declarative state check)
           if (hasOpenDialogs) {
-            console.log('[NavDebug] [ESC] Dialog detected (state > 0). Dialog will close itself via its own handler.');
             // Don't dispatch Escape here - the dialog's own ESC handler will catch it
             // because we have stopPropagation() in the dialog component
-            console.log('[NavDebug] [ESC] Navigation intercepted - waiting for dialog to close');
             return; // Consume the ESC - don't proceed to thread/room navigation
           }
 
           // Priority 2: If thread is open, close it
           if (activeThreadRef.current !== null) {
-            console.log('[NavDebug] [ESC] No dialogs. Thread active. Closing thread.');
             setActiveThread(null);
             return;
           }
           // Priority 3: Otherwise, navigate home
-          console.log('[NavDebug] [ESC] No dialogs, no thread. Closing room (Navigating home).');
           markAsRead(mx, room.roomId, hideActivity);
           navigate(getHomePath(), { replace: false });
         }

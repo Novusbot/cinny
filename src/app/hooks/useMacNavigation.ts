@@ -36,19 +36,8 @@ export const useMacNavigation = (onSwipeRight?: () => boolean) => {
       ) {
         // Debounce: prevent multiple triggers from the same swipe gesture
         if (swipeDebounceRef.current !== null) {
-          console.log('[NavDebug] [Swipe] Swipe ignored - debounce active');
           return;
         }
-
-        console.log('[NavDebug] [Swipe] handleNavigateBack triggered via: wheel', {
-          deltaX: event.deltaX,
-          deltaY: event.deltaY,
-          hasOpenDialogs,
-          activeElement: {
-            tag: document.activeElement?.tagName,
-            className: document.activeElement?.className?.substring(0, 50)
-          }
-        });
 
         // Set cooldown IMMEDIATELY to block all subsequent wheel events
         // from this same physical swipe gesture
@@ -58,7 +47,6 @@ export const useMacNavigation = (onSwipeRight?: () => boolean) => {
 
         // Level 1: Modal dialogs (declarative state check)
         if (hasOpenDialogs) {
-          console.log('[NavDebug] [Swipe] Dialog detected (state > 0). Dispatching Escape to close dialog.');
           // Dispatch Escape to close the topmost dialog
           // The dialog's own FocusTrap/handlers will intercept and close it
           document.dispatchEvent(
@@ -70,18 +58,15 @@ export const useMacNavigation = (onSwipeRight?: () => boolean) => {
               bubbles: true,
             })
           );
-          console.log('[NavDebug] [Swipe] Navigation intercepted - dialog close attempted');
           return; // Consume the swipe - don't proceed to thread/room navigation
         }
 
         // Level 2: Thread check (callback from Room.tsx)
         if (onSwipeRight?.()) {
-          console.log('[NavDebug] [Swipe] No dialogs. Thread active. Closing thread.');
           return; // Swipe consumed, don't navigate home
         }
 
         // Level 3: Room navigation (home)
-        console.log('[NavDebug] [Swipe] No dialogs, no thread. Closing room (Navigating home).');
         handleNavigateHome();
       }
     },

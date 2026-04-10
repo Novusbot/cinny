@@ -4,22 +4,22 @@
 
 Данный документ описывает кастомные изменения, внесенные в исходный код клиента Cinny для адаптации UI/UX под паттерны мессенджера Telegram.
 
-## 1. Нативная навигация и жесты (macOS) — УМНАЯ иерархическая навигация
-**Цель:** Добавить поддержку свайпов с Magic Mouse / трекпада и горячих клавиш для управления комнатами, тредами и модальными окнами с соблюдением Z-индекса интерфейса.
+## 1. Нативная навигация и жесты (macOS) — УМНАЯ иерархическая навигация (State-based)
+**Цель:** Добавить поддержку свайпов с Magic Mouse / трекпада и горячих клавиш для управления комнатами, тредами и модальными окнами с соблюдением Z-индекса интерфейса. Использовать декларативное состояние вместо императивных DOM-проверок.
 
 * **Глобальная навигация с приоритетами (Назад / ESC / Свайп):**
     * **Файлы:** `src/app/features/room/Room.tsx`, `src/app/hooks/useMacNavigation.ts`
-    * **Новый файл:** `src/app/utils/dialog.ts` — утилиты для проверки открытых модальных окон
+    * **Новые файлы:**
+        * `src/app/state/navigationStack.ts` — Jotai атомы для централизованного учета открытых модалок
+        * `src/app/hooks/useDialogStack.ts` — хук для регистрации/снятия модалок в стеке навигации
+    * **Архитектура:** Переход от **императивных DOM-проверок** (`document.querySelector`) к **декларативному управлению состоянием** (Jotai atoms)
     * **Реализация:** Внедрена **умная иерархическая навигация** с 3 уровнями приоритета:
-        1.  **Приоритет 1 (Модальные окна):** Проверка наличия открытых диалогов (InsertLinkDialog, ForwardDialog и др.) через `hasOpenDialog()`. При обнаружении — закрывает модалку программно через `tryCloseTopDialog()` (эмуляция Escape)
-        2.  **Приоритет 2 (Треды):** Если модалок нет, но открыт тред — закрывает тред
+        1.  **Приоритет 1 (Модальные окна):** Проверка через Jotai атом `hasOpenDialogsAtom`. Модалки сами регистрируются при маунте через `useDialogStack().mount()` и снимаются при анмаунте. Никаких гонок состояний!
+        2.  **Приоритет 2 (Треды):** Если модалок нет (`activeDialogsCount === 0`), но открыт тред — закрывает тред
         3.  **Приоритет 3 (Комната):** Если нет модалок и тредов — закрывает комнату (навигация домой)
-    * **Детекция модалок:** Использует мульти-проверку:
-        * Portal container (`portalContainer`) — основной индикатор
-        * ARIA атрибут `role="dialog"` — стандарт доступности
-        * CSS классы Overlay/Modal — библиотека folds
-    * **Обработка свайпов:** `useMacNavigation` проверяет `hasOpenDialog()` перед навигацией. При обнаружении модалки — эмулирует Escape и прерывает выполнение
-    * **Обработка ESC:** `useKeyDown` в Room.tsx проверяет `hasOpenDialog()` в начале обработчика. При обнаружении — закрывает модалку и предотвращает дальнейшую навигацию
+    * **Остановка всплытия ESC:** Все модалки обязаны вызывать `evt.stopPropagation()` + `evt.nativeEvent.stopImmediatePropagation()` в обработчиках ESC. Это предотвращает двойное закрытие (модалка + тред/комната) от одного нажатия
+    * **Обработка свайпов:** `useMacNavigation` читает `hasOpenDialogs` из Jotai. При `true` — диспатчит событие Escape, которое перехватывается FocusTrap модалки
+    * **Обработка ESC:** `useKeyDown` в Room.tsx читает `hasOpenDialogs` из Jotai. При `true` — просто возвращает управление (модалка закроется своим обработчиком)
 
 * **Как это работает:**
     | Ситуация | Поведение свайпа/ESC |
@@ -28,7 +28,25 @@
     | Открыт тред (без модалок) | Закрывает тред, НЕ закрывает комнату |
     | Нет открытых элементов | Закрывает комнату → домой |
 
-* **Документация:** `src/app/utils/dialog.ts` — централизованные утилиты `hasOpenDialog()` и `tryCloseTopDialog()` для использования во всех обработчиках навигации
+* **Интеграция новых модалок:**
+    ```typescript
+    import { useDialogStack } from '../../hooks/useDialogStack';
+
+    export function MyNewDialog() {
+      const dialogStack = useDialogStack();
+      
+      useEffect(() => {
+        dialogStack.mount();
+        return () => dialogStack.unmount();
+      }, [dialogStack]);
+      
+      // ... rest of component
+    }
+    ```
+
+* **Документация:** 
+    * `src/app/state/navigationStack.ts` — атомы `activeDialogsCountAtom` и `hasOpenDialogsAtom`
+    * `src/app/hooks/useDialogStack.ts` — хуки `useDialogStack()`, `useHasOpenDialogs()`, `useActiveDialogsCount()`
 
 
 ## 2. Единая лента чатов (Все комнаты) на вкладке Home
@@ -172,15 +190,16 @@
     * Автоматическая отправка в тред когда `activeThread` активен
     * `content['m.relates_to'] = { rel_type: 'm.thread', event_id: activeThread, is_falling_back: true }`
 
-* **Перехват жестов навигации (УМНАЯ навигация):**
-    * **Файлы:** `src/app/features/room/Room.tsx`, `src/app/hooks/useMacNavigation.ts`, `src/app/utils/dialog.ts`
+* **Перехват жестов навигации (УМНАЯ навигация, State-based):**
+    * **Файлы:** `src/app/features/room/Room.tsx`, `src/app/hooks/useMacNavigation.ts`, `src/app/state/navigationStack.ts`, `src/app/hooks/useDialogStack.ts`
     * **Реализована иерархическая навигация с 3 уровнями приоритета:**
-        1.  **Модальные окна:** Проверка через `hasOpenDialog()` → закрытие через `tryCloseTopDialog()`
+        1.  **Модальные окна:** Проверка через `hasOpenDialogsAtom` (Jotai) → модалка закрывается своим обработчиком
         2.  **Треды:** Проверка `activeThread` → закрытие через `setActiveThread(null)`
         3.  **Комнаты:** Навигация домой через `navigate(getHomePath())`
     * `useMacNavigation` принимает callback `onSwipeRight` для перехвата жеста (закрытие треда)
     * Свайп и ESC **НЕ закрывают** тред или комнату, если открыты модальные окна
-    * **Документация:** Подробнее в разделе 1 (Нативная навигация — УМНАЯ иерархическая навигация)
+    * **Архитектура:** Модалки регистрируются в глобальном стеке через `useDialogStack().mount()` при маунте и снимаются при анмаунте
+    * **Документация:** Подробнее в разделе 1 (Нативная навигация — УМНАЯ иерархическая навигация State-based)
 
 ## 10. Исправление пропадания тредов при удалении корневого сообщения
 **Цель:** При удалении (редации) корневого сообщения треда, тред и его ответы должны оставаться доступными.
@@ -429,106 +448,127 @@
 * **Файлы:**
     * `src/app/features/room/RoomInput.tsx` — исправлена логика получения выделенного текста
 
-## 16. Умная глобальная навигация (свайп и ESC) с учетом Z-индекса интерфейса
-**Цель:** Сделать глобальную навигацию "умной" и универсальной, чтобы она соблюдала Z-индекс и иерархию интерфейса (Модальные окна → Треды → Комната).
+## 16. Рефакторинг глобальной навигации — переход от DOM-проверок к State Management (Jotai)
+**Цель:** Устранить гонки состояний и проблемы с всплытием событий при использовании императивных DOM-проверок (`document.querySelector`). Перейти на декларативное управление состоянием модалок через Jotai atoms.
 
-* **Проблема:** Глобальные слушатели жестов (в `useMacNavigation` или `Room.tsx`) не проверяли, открыты ли поверх чата модальные окна. Нажатие ESC или свайп при открытом окне InsertLinkDialog приводило к закрытию всего чата или треда, а не самой модалки.
+* **Проблема старой реализации:**
+    * `hasOpenDialog()` использовала `document.querySelector(...)` для поиска открытых модалок
+    * Это приводило к гонкам состояний: состояние React обновляется, но DOM ещё не обновился
+    * ESC событие всплывало от модалки до `Room.tsx` → двойное закрытие (модалка + тред)
+    * Селекторы могли не найти модалку, если она рендерится в Portal с задержкой
 
-* **Решение:** Внедрена универсальная проверка на активные модальные окна перед выполнением навигации.
+* **Решение (State-based архитектура):**
 
-* **Реализация:**
-
-    **Часть A — Создание утилит детекции модалок (`src/app/utils/dialog.ts`):**
+    **Часть A — Создание глобального стека навигации (`src/app/state/navigationStack.ts`):**
     ```typescript
-    // Мульти-проверка наличия открытых модалок
-    export function hasOpenDialog(): boolean {
-      // 1. Portal container (основной индикатор)
-      const portalContainer = document.getElementById('portalContainer');
-      if (portalContainer && portalContainer.children.length > 0) return true;
-      
-      // 2. ARIA role="dialog"
-      if (document.querySelector('[role="dialog"]')) return true;
-      
-      // 3. CSS классы Overlay/Modal
-      if (document.querySelector('[class*="Overlay"], [class*="Modal"]')) return true;
-      
-      return false;
-    }
+    // Атом-счетчик: сколько модалок сейчас открыто
+    export const activeDialogsCountAtom = atom(0);
+    
+    // Производный атом: true если есть хотя бы одна открытая модалка
+    export const hasOpenDialogsAtom = atom((get) => get(activeDialogsCountAtom) > 0);
+    ```
 
-    // Закрытие верхней модалки через эмуляцию Escape
-    export function tryCloseTopDialog(): boolean {
-      if (!hasOpenDialog()) return false;
+    **Часть B — Хук для регистрации модалок (`src/app/hooks/useDialogStack.ts`):**
+    ```typescript
+    export function useDialogStack() {
+      const setCount = useSetAtom(activeDialogsCountAtom);
       
-      document.dispatchEvent(
-        new KeyboardEvent('keydown', {
-          key: 'Escape',
-          code: 'Escape',
-          keyCode: 27,
-          which: 27,
-          bubbles: true,
-        })
-      );
-      return true;
+      const mount = useCallback(() => {
+        setCount((prev) => prev + 1);  // Регистрируем модалку
+      }, [setCount]);
+      
+      const unmount = useCallback(() => {
+        setCount((prev) => Math.max(0, prev - 1));  // Снимаем модалку
+      }, [setCount]);
+      
+      return { mount, unmount };
     }
     ```
 
-    **Часть B — Интеграция в обработчик свайпов (`useMacNavigation.ts`):**
+    **Часть C — Интеграция в InsertLinkDialog:**
     ```typescript
+    export function InsertLinkDialog() {
+      const dialogStack = useDialogStack();
+      
+      // Регистрация в стеке навигации
+      useEffect(() => {
+        dialogStack.mount();
+        return () => dialogStack.unmount();
+      }, [dialogStack]);
+      
+      // ... rest of component
+    }
+    ```
+
+    **Часть D — Обновление обработчиков навигации:**
+    
+    *`useMacNavigation.ts` (свайпы):*
+    ```typescript
+    const hasOpenDialogs = useAtomValue(hasOpenDialogsAtom);  // Читаем из Jotai
+    
     const handleWheel = useCallback((event: WheelEvent) => {
-      if (event.deltaX <= SWIPE_DELTA_X_THRESHOLD && ...) {
-        // UNIVERSAL CHECK (Уровень 1: Модалки)
-        if (hasOpenDialog()) {
-          tryCloseTopDialog(); // Закрываем модалку
-          return; // Прерываем — НЕ закрываем тред/комнату
-        }
-
-        // Уровень 2: Треды
-        if (onSwipeRight?.()) return; // Закрыли тред
-        
-        // Уровень 3: Комната
-        handleNavigateHome();
+      if (hasOpenDialogs) {
+        // Диспатчим Escape — модалка закроется своим обработчиком
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', ... }));
+        return; // Не закрываем тред/комнату
       }
-    }, [...]);
+      // ... thread/room logic
+    }, [hasOpenDialogs]);
     ```
-
-    **Часть C — Интеграция в обработчик ESC (`Room.tsx`):**
+    
+    *`Room.tsx` (ESC):*
     ```typescript
+    const hasOpenDialogs = useAtomValue(hasOpenDialogsAtom);  // Читаем из Jotai
+    
     useKeyDown(window, useCallback((evt) => {
       if (isKeyHotkey('escape', evt)) {
-        // Приоритет 1: Модалки
-        if (hasOpenDialog()) {
-          tryCloseTopDialog();
-          return; // НЕ закрываем тред/комнату
+        if (hasOpenDialogs) {
+          return; // Модалка закроется своим обработчиком (stopPropagation)
         }
-        
-        // Приоритет 2: Треды
-        if (activeThreadRef.current !== null) {
-          setActiveThread(null);
-          return;
-        }
-        
-        // Приоритет 3: Комната
-        navigate(getHomePath());
+        // ... thread/room logic
       }
-    }, [...]));
+    }, [hasOpenDialogs]));
+    ```
+
+    **Часть E — Остановка всплытия ESC в модалках:**
+    ```typescript
+    // InsertLinkDialog.tsx
+    const handleKeyDown = (evt) => {
+      if (isKeyHotkey('escape', evt)) {
+        evt.stopPropagation();  // Блокируем всплытие до window
+        evt.nativeEvent.stopImmediatePropagation();  // Жесткая блокировка
+        handleRequestClose();
+      }
+    };
     ```
 
 * **Как это работает:**
-    | Ситуация | Поведение свайпа/ESC |
-    |----------|---------------------|
-    | Открыт InsertLinkDialog | Закрывает InsertLinkDialog, НЕ закрывает тред/комнату |
-    | Открыт ForwardDialog | Закрывает ForwardDialog, НЕ закрывает тред/комнату |
-    | Открыт тред (без модалок) | Закрывает тред, НЕ закрывает комнату |
-    | Нет открытых элементов | Закрывает комнату → навигация домой |
+    | Этап | Что происходит |
+    |------|----------------|
+    | 1. Модалка открывается | React рендерит компонент InsertLinkDialog |
+    | 2. `useEffect` маунта | Вызывает `dialogStack.mount()` → `activeDialogsCountAtom: 0 → 1` |
+    | 3. Пользователь нажимает ESC | `Room.tsx` читает `hasOpenDialogsAtom` → `true` |
+    | 4. Проверка приоритета | `if (hasOpenDialogs) return;` — Room.tsx НЕ закрывает тред |
+    | 5. ESC перехватывается модалкой | `handleKeyDown` с `stopPropagation()` |
+    | 6. Модалка закрывается | Вызывает `closeDialog()` → atom = `undefined` |
+    | 7. `useEffect` анмаунта | Вызывает `dialogStack.unmount()` → `activeDialogsCountAtom: 1 → 0` |
+    | 8. Состояние обновлено | Навигация снова может закрывать тред/комнату |
 
-* **Архитектурное решение:**
-    * **Централизованные утилиты:** `hasOpenDialog()` и `tryCloseTopDialog()` в отдельном файле `dialog.ts`
-    * **Переиспользование:** Оба обработчика (свайп и ESC) используют одни и те же функции
-    * **Расширяемость:** Легко добавить новые уровни проверки (например, автодополнение, тултипы)
+* **Архитектурные преимущества:**
+    * **Без гонок состояний:** Jotai атом обновляется синхронно с React рендером
+    * **Без DOM-хаков:** Никаких `querySelector`, `role="dialog"`, проверок классов
+    * **Строгая типизация:** TypeScript контролирует всё, нет loose селекторов
+    * **Расширяемость:** Новая модалка = 3 строки кода (`useDialogStack()`)
+    * **Предсказуемость:** Единый источник правды для всех обработчиков навигации
+
+* **Удаленные файлы:**
+    * `src/app/utils/dialog.ts` — больше не нужен (заменен на `navigationStack.ts`)
 
 * **Файлы:**
-    * `src/app/utils/dialog.ts` — **НОВЫЙ** файл с утилитами `hasOpenDialog()` и `tryCloseTopDialog()`
-    * `src/app/hooks/useMacNavigation.ts` — добавлена проверка модалок перед навигацией
-    * `src/app/features/room/Room.tsx` — добавлена проверка модалок в обработчик ESC
+    * `src/app/state/navigationStack.ts` — **НОВЫЙ** атомы `activeDialogsCountAtom`, `hasOpenDialogsAtom`
+    * `src/app/hooks/useDialogStack.ts` — **НОВЫЙ** хуки `useDialogStack()`, `useHasOpenDialogs()`
+    * `src/app/features/insert-link-dialog/InsertLinkDialog.tsx` — интеграция `useDialogStack()`, `stopPropagation()`
+    * `src/app/hooks/useMacNavigation.ts` — читает `hasOpenDialogs` из Jotai вместо DOM
+    * `src/app/features/room/Room.tsx` — читает `hasOpenDialogs` из Jotai вместо DOM
 
 

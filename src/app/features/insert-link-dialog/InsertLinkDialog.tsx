@@ -46,7 +46,6 @@ export function InsertLinkDialog() {
 
   // Wrapper for closeDialog to log all close attempts
   const handleRequestClose = useCallback(() => {
-    console.log('[NavDebug] [InsertLinkDialog] handleRequestClose triggered (close dialog)');
     closeDialog();
   }, [closeDialog]);
 
@@ -63,13 +62,11 @@ export function InsertLinkDialog() {
   // This prevents event bubbling to Room.tsx global handler
   const handleRootKeyDown: KeyboardEventHandler<HTMLDivElement> = (evt) => {
     if (isKeyHotkey('escape', evt)) {
-      console.log('[NavDebug] [InsertLinkDialog] Escape caught at root Overlay level');
       // ЖЕСТКО блокируем всплытие события до Room.tsx / window
       evt.stopPropagation();
       if (evt.nativeEvent && evt.nativeEvent.stopImmediatePropagation) {
         evt.nativeEvent.stopImmediatePropagation();
       }
-      console.log('[NavDebug] [InsertLinkDialog] ESC propagation stopped at root');
       handleRequestClose();
     }
   };
@@ -84,13 +81,11 @@ export function InsertLinkDialog() {
 
   const handleKeyDown: KeyboardEventHandler<HTMLInputElement> = (evt) => {
     if (isKeyHotkey('escape', evt)) {
-      console.log('[NavDebug] [InsertLinkDialog] Escape key pressed in input field');
       // ЖЕСТКО блокируем всплытие события до Room.tsx / window
       evt.stopPropagation();
       if (evt.nativeEvent && evt.nativeEvent.stopImmediatePropagation) {
         evt.nativeEvent.stopImmediatePropagation();
       }
-      console.log('[NavDebug] [InsertLinkDialog] ESC propagation stopped');
       handleRequestClose();
       return;
     }
@@ -103,14 +98,9 @@ export function InsertLinkDialog() {
   const handleInsert = useCallback(() => {
     if (!url.trim()) {
       // Don't allow inserting without URL
-      console.log('[NavDebug] [InsertLinkDialog] Insert blocked - URL is empty');
       return;
     }
 
-    console.log('[NavDebug] [InsertLinkDialog] Inserting link and closing dialog', {
-      text: text.trim(),
-      url: url.trim()
-    });
     if (dialogState?.onInsert) {
       dialogState.onInsert(text.trim(), url.trim());
     }
@@ -126,10 +116,7 @@ export function InsertLinkDialog() {
           focusTrapOptions={{
             initialFocus: () => textInputRef.current,
             clickOutsideDeactivates: true,
-            onDeactivate: () => {
-              console.log('[NavDebug] [InsertLinkDialog] FocusTrap onDeactivate triggered (click outside or programmatic close)');
-              handleRequestClose();
-            },
+            onDeactivate: handleRequestClose,
             escapeDeactivates: stopPropagation,
           }}
         >
