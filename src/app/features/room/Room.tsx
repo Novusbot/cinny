@@ -21,6 +21,7 @@ import { CallChatView } from './CallChatView';
 import { getHomePath } from '../../pages/pathUtils';
 import { useMacNavigation } from '../../hooks/useMacNavigation';
 import { useActiveThread, useSetActiveThread } from '../../state/hooks/activeThread';
+import { hasOpenDialog, tryCloseTopDialog } from '../../utils/dialog';
 
 export function Room() {
   const { eventId } = useParams();
@@ -61,12 +62,19 @@ export function Room() {
     useCallback(
       (evt) => {
         if (isKeyHotkey('escape', evt)) {
-          // Priority 1: If thread is open, close it
+          // Priority 1: Check if any modal dialogs are open (InsertLinkDialog, ForwardDialog, etc.)
+          // If yes, close them instead of navigating away from thread/room
+          if (hasOpenDialog()) {
+            tryCloseTopDialog();
+            return; // Consume the ESC - don't proceed to thread/room navigation
+          }
+
+          // Priority 2: If thread is open, close it
           if (activeThreadRef.current !== null) {
             setActiveThread(null);
             return;
           }
-          // Priority 2: Otherwise, navigate home
+          // Priority 3: Otherwise, navigate home
           markAsRead(mx, room.roomId, hideActivity);
           navigate(getHomePath(), { replace: false });
         }

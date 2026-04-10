@@ -467,20 +467,14 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         // Handle Cmd+K / Ctrl+K for inserting links
         if (isKeyHotkey('mod+k', evt)) {
           evt.preventDefault();
-          
+
           // Get the current selection from the Slate editor
           const { selection } = editor;
           let selectedText = '';
-          
+
           if (selection && !Range.isCollapsed(selection)) {
-            // Get selected text from Slate editor using the proper method
-            selectedText = (Node.string(editor) || '').slice(selection.anchor.offset, selection.focus.offset);
-            
-            // Fallback: try getting text from the selected range
-            if (!selectedText) {
-              const fragment = editor.fragment(selection);
-              selectedText = fragment.map(node => Node.string(node)).join('');
-            }
+            // Use Editor.string() to correctly extract selected text across multiple nodes
+            selectedText = Editor.string(editor, selection);
           }
           
           // Read clipboard using Tauri API in desktop app or Web API in browser

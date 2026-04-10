@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getHomePath } from '../pages/pathUtils';
+import { hasOpenDialog, tryCloseTopDialog } from '../utils/dialog';
 
 const SWIPE_DEBOUNCE_MS = 1000; // 1 second cooldown to prevent double-triggering
 const SWIPE_DELTA_X_THRESHOLD = -40;
@@ -40,12 +41,21 @@ export const useMacNavigation = (onSwipeRight?: () => boolean) => {
           swipeDebounceRef.current = null;
         }, SWIPE_DEBOUNCE_MS);
 
+        // UNIVERSAL CHECK (Level 1: Modals/Dialogs)
+        // Check if any modal dialogs are open (InsertLinkDialog, ForwardDialog, etc.)
+        // If yes, close them instead of navigating away from thread/room
+        if (hasOpenDialog()) {
+          // Simulate Escape key to close the topmost modal
+          tryCloseTopDialog();
+          return; // Consume the swipe - don't proceed to thread/room navigation
+        }
+
         // Check if swipe was consumed (e.g., closing a thread)
         if (onSwipeRight?.()) {
           return; // Swipe consumed, don't navigate home
         }
 
-        // If not consumed, navigate home
+        // If not consumed, navigate home (Level 3: Room)
         handleNavigateHome();
       }
     },
