@@ -101,7 +101,7 @@ export const SpoilerRule: InlineMDRule = {
 };
 
 const LINK_ALT = `\\[${MIN_ANY}\\]`;
-const LINK_URL = `\\((https?:\\/\\/.+?)\\)`;
+const LINK_URL = `\\((https?:\\/\\/(?:[^)(]+|\\([^)(]*\\))*)\\)`;
 const LINK_REG_1 = new RegExp(`${LINK_ALT}${LINK_URL}`);
 export const LinkRule: InlineMDRule = {
   match: (text) => text.match(LINK_REG_1),
