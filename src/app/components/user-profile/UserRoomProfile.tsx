@@ -2,12 +2,13 @@ import { Box, Button, config, Icon, Icons, Text } from 'folds';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserHero, UserHeroName } from './UserHero';
-import { getMxIdServer, mxcUrlToHttp } from '../../utils/matrix';
+import { getMxIdServer, mxcUrlToHttp, getDMRoomFor } from '../../utils/matrix';
 import { getMemberAvatarMxc, getMemberDisplayName } from '../../utils/room';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { useRoom } from '../../hooks/useRoom';
+import { useDirectRooms } from '../../pages/client/direct/useDirectRooms';
 import { useUserPresence } from '../../hooks/useUserPresence';
 import { IgnoredUserAlert, MutualRoomsChip, OptionsChip, ServerChip, ShareChip } from './UserChips';
 import { useCloseUserRoomProfile } from '../../state/hooks/userRoomProfile';
@@ -20,7 +21,7 @@ import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useMemberPowerCompare } from '../../hooks/useMemberPowerCompare';
 import { CreatorChip } from './CreatorChip';
-import { getDirectCreatePath, withSearchParam } from '../../pages/pathUtils';
+import { getDirectCreatePath, getDirectRoomPath, withSearchParam } from '../../pages/pathUtils';
 import { DirectCreateSearchParams } from '../../pages/paths';
 
 type UserRoomProfileProps = {
@@ -58,9 +59,32 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
   const avatarUrl = (avatarMxc && mxcUrlToHttp(mx, avatarMxc, useAuthentication)) ?? undefined;
 
   const presence = useUserPresence(userId);
+  const directs = useDirectRooms();
 
   const handleMessage = () => {
     closeUserRoomProfile();
+
+    const mDirectEvent = mx.getAccountData('m.direct' as any);
+    if (mDirectEvent) {
+      const dmMap = mDirectEvent.getContent() as Record<string, string[]>;
+      const roomIds = dmMap[userId];
+      if (roomIds) {
+        for (let i = 0; i < roomIds.length; i += 1) {
+          const room = mx.getRoom(roomIds[i]);
+          if (room && room.getMyMembership() === Membership.Join) {
+            navigate(getDirectRoomPath(roomIds[i]));
+            return;
+          }
+        }
+      }
+    }
+
+    const dmRoom = getDMRoomFor(mx, userId);
+    if (dmRoom && directs.includes(dmRoom.roomId)) {
+      navigate(getDirectRoomPath(dmRoom.roomId));
+      return;
+    }
+
     const directSearchParam: DirectCreateSearchParams = {
       userId,
     };
