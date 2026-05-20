@@ -12,20 +12,20 @@
   "featuredCommunities": {
     "openAsDefault": false,
     "spaces": [
-      "#cinny:matrix.org",
+      "#cinny-space:matrix.org",
       "#community:matrix.org",
       "#space:unredacted.org",
-      "#librewolf-community:matrix.org",
-      "#stickers-and-emojis:tastytea.de",
-      "#videogames:waywardinn.com",
       "#science-space:matrix.org",
       "#libregaming-games:tchncs.de",
       "#mathematics-on:matrix.org"
     ],
     "rooms": [
-      "#tuwunel:grin.hu",
+      "#cinny:matrix.org",
       "#freesoftware:matrix.org",
-      "#gentoo:matrix.org"
+      "#pcapdroid:matrix.org",
+      "#gentoo:matrix.org",
+      "#PrivSec.dev:arcticfoxes.net",
+      "#disroot:aria-net.org"
     ],
     "servers": [ "matrix.org", "mozilla.org", "unredacted.org" ]
   },
