@@ -22,6 +22,8 @@ import { getHomePath } from '../../pages/pathUtils';
 import { useMacNavigation } from '../../hooks/useMacNavigation';
 import { useActiveThread, useSetActiveThread } from '../../state/hooks/activeThread';
 import { hasOpenDialogsAtom } from '../../state/navigationStack';
+import { useCallEmbed } from '../../hooks/useCallEmbed';
+import { useCallMembers, useCallSession } from '../../hooks/useCall';
 
 export function Room() {
   const { eventId } = useParams();
@@ -29,6 +31,10 @@ export function Room() {
   const mx = useMatrixClient();
   const navigate = useNavigate();
   const hasOpenDialogs = useAtomValue(hasOpenDialogsAtom);
+
+  const callSession = useCallSession(room);
+  const callMembers = useCallMembers(room, callSession);
+  const callEmbed = useCallEmbed();
 
   const [isDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
@@ -84,7 +90,7 @@ export function Room() {
     )
   );
 
-  const callView = room.isCallRoom();
+  const callView = callEmbed?.roomId === room.roomId || room.isCallRoom() || callMembers.length > 0;
 
   return (
     <PowerLevelsContextProvider value={powerLevels}>
