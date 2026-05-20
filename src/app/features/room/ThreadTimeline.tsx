@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Box, config, color } from 'folds';
-import { MatrixEvent, Room } from 'matrix-js-sdk';
+import { MatrixEvent, Room, RoomEvent, ThreadEvent } from 'matrix-js-sdk';
 import { Message, Reactions } from '../room/message';
 import { RenderMessageContent } from '../../components/RenderMessageContent';
 import { RedactedContent } from '../../components/message/MsgTypeRenderers';
@@ -21,19 +21,40 @@ import { useAccessiblePowerTagColors, useGetMemberPowerTag } from '../../hooks/u
 import { useImagePackRooms } from '../../hooks/useImagePackRooms';
 import { roomToParentsAtom } from '../../state/room/roomToParents';
 import { useAtomValue } from 'jotai';
-import { getEventReactions, getEditedEvent } from '../../utils/room';
+import { getEventReactions, getEditedEvent, reactionOrEditEvent } from '../../utils/room';
 import { Reply } from '../../components/message/Reply';
-import { EventType, RoomEvent, EventTimelineSetHandlerMap, RoomEventHandlerMap } from 'matrix-js-sdk';
+import { EventType, Direction } from 'matrix-js-sdk';
 
 type ThreadTimelineProps = {
   room: Room;
   rootEventId: string;
 };
 
+const THREAD_REL_TYPES = ['m.thread', 'io.element.thread'];
+
+const getThreadRelationRootId = (event: MatrixEvent): string | undefined => {
+  if (event.threadRootId) return event.threadRootId;
+
+  const relation = event.getWireContent()?.['m.relates_to'];
+  return THREAD_REL_TYPES.includes(relation?.rel_type) ? relation?.event_id : undefined;
+};
+
+const isThreadEvent = (event: MatrixEvent, rootEventId: string) =>
+  event.getId() === rootEventId || getThreadRelationRootId(event) === rootEventId;
+
+const mergeThreadEvents = (events: MatrixEvent[]) => {
+  const eventById = new Map<string, MatrixEvent>();
+  events.forEach((event) => {
+    const eventId = event.getId();
+    if (eventId) eventById.set(eventId, event);
+  });
+
+  return [...eventById.values()].sort((a, b) => a.getTs() - b.getTs());
+};
+
 export function ThreadTimeline({ room, rootEventId }: ThreadTimelineProps) {
   const mx = useMatrixClient();
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
-  const [showDeveloperTools] = useSetting(settingsAtom, 'showDeveloperTools');
   const [messageLayout] = useSetting(settingsAtom, 'messageLayout');
   const [messageSpacing] = useSetting(settingsAtom, 'messageSpacing');
   const [legacyUsernameColor] = useSetting(settingsAtom, 'legacyUsernameColor');
@@ -43,7 +64,6 @@ export function ThreadTimeline({ room, rootEventId }: ThreadTimelineProps) {
   const [urlPreview] = useSetting(settingsAtom, 'urlPreview');
   const [encUrlPreview] = useSetting(settingsAtom, 'encUrlPreview');
   const showUrlPreview = room.hasEncryptionStateEvent() ? encUrlPreview : urlPreview;
-  const [showHiddenEvents] = useSetting(settingsAtom, 'showHiddenEvents');
 
   const direct = useIsDirectRoom();
   const powerLevels = usePowerLevelsContext();
@@ -62,63 +82,141 @@ export function ThreadTimeline({ room, rootEventId }: ThreadTimelineProps) {
   const roomToParents = useAtomValue(roomToParentsAtom);
   const imagePackRooms = useImagePackRooms(room.roomId, roomToParents);
 
-  // State to trigger re-renders when new events arrive (for local echo support)
-  const [, setEventUpdateCounter] = useState(0);
+  const thread = room.getThread(rootEventId);
 
-  // Subscribe to timeline events to support local echo in threads
-  // This mirrors the RoomTimeline's useLiveEventArrive pattern
-  const handleThreadEvent = useCallback(
-    (mEvent: MatrixEvent) => {
-      // Only trigger re-render if this event belongs to our thread
-      const relation = mEvent.getRelation?.();
-      const isThreadReply = relation?.rel_type === 'm.thread' && relation?.event_id === rootEventId;
-      const isThreadRoot = mEvent.getId() === rootEventId;
-      
-      if (isThreadReply || isThreadRoot) {
-        // Force re-render by updating counter
-        setEventUpdateCounter((prev) => prev + 1);
-      }
-    },
-    [rootEventId]
+  const getCachedThreadEvents = useCallback(() => {
+    const liveEvents = room.getLiveTimeline().getEvents();
+    const sdkThreadEvents = thread ? thread.events : [];
+    return mergeThreadEvents(
+      [...liveEvents, ...sdkThreadEvents].filter((e) => isThreadEvent(e, rootEventId))
+    );
+  }, [room, rootEventId, thread]);
+
+  const [rootEvent, setRootEvent] = useState<MatrixEvent | undefined>(
+    thread?.rootEvent ?? room.findEventById(rootEventId)
   );
+  const [threadEvents, setThreadEvents] = useState<MatrixEvent[]>(getCachedThreadEvents);
+  const [isLoading, setIsLoading] = useState(true);
 
+  const syncCachedEvents = useCallback(() => {
+    setRootEvent(thread?.rootEvent ?? room.findEventById(rootEventId));
+    setThreadEvents(getCachedThreadEvents());
+  }, [getCachedThreadEvents, room, rootEventId, thread]);
+
+  // Эффект 1: загружаем тред через /relations и рендерим результат напрямую.
+  // Не добавляем эти events в SDK ThreadTimelineSet: SDK отбрасывает часть replies
+  // при nested replies, хотя Element показывает их из relations-ответа.
   useEffect(() => {
-    // Listen for new timeline events (including local echoes)
-    const handleTimelineEvent: EventTimelineSetHandlerMap[RoomEvent.Timeline] = (
-      mEvent,
-      eventRoom,
-      _toStartOfTimeline,
-      _removed,
-      data
-    ) => {
-      if (eventRoom?.roomId !== room.roomId || !data.liveEvent) return;
-      handleThreadEvent(mEvent);
+    let isUnmounted = false;
+
+    const fetchAllThreadEvents = async () => {
+      const loadedEvents: MatrixEvent[] = [];
+      let loadedRootEvent: MatrixEvent | undefined;
+
+      try {
+        const cachedEvents = getCachedThreadEvents();
+        if (cachedEvents.length > 0) {
+          setThreadEvents(cachedEvents);
+          setIsLoading(false);
+        } else {
+          setIsLoading(true);
+        }
+
+        for (const relType of THREAD_REL_TYPES) {
+          let from: string | undefined;
+
+          do {
+            const relations = await mx.relations(room.roomId, rootEventId, relType, null, {
+              dir: Direction.Backward,
+              limit: 100,
+              recurse: true,
+              from,
+            });
+
+            if (relations.originalEvent) loadedRootEvent = relations.originalEvent;
+            loadedEvents.push(...relations.events);
+            from = relations.nextBatch ?? undefined;
+          } while (from && !isUnmounted);
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('[ThreadTimeline] mx.relations failed:', e);
+      } finally {
+        if (!isUnmounted) {
+          const cachedEvents = getCachedThreadEvents();
+          setRootEvent(loadedRootEvent ?? thread?.rootEvent ?? room.findEventById(rootEventId));
+          const mergedEvents = mergeThreadEvents(
+            [...cachedEvents, ...loadedEvents].filter((e) => isThreadEvent(e, rootEventId))
+          );
+          setThreadEvents(mergedEvents);
+          setIsLoading(false);
+        }
+      }
     };
 
-    // Listen for local echo updates (when local ID is replaced with server ID)
-    const handleLocalEchoUpdated: RoomEventHandlerMap[RoomEvent.LocalEchoUpdated] = (
-      mEvent,
-      eventRoom
-    ) => {
-      if (eventRoom?.roomId !== room.roomId) return;
-      handleThreadEvent(mEvent);
-    };
-
-    room.on(RoomEvent.Timeline, handleTimelineEvent);
-    room.on(RoomEvent.LocalEchoUpdated, handleLocalEchoUpdated);
+    fetchAllThreadEvents();
 
     return () => {
-      room.removeListener(RoomEvent.Timeline, handleTimelineEvent);
-      room.removeListener(RoomEvent.LocalEchoUpdated, handleLocalEchoUpdated);
+      isUnmounted = true;
     };
-  }, [room, rootEventId, handleThreadEvent]);
+  }, [getCachedThreadEvents, mx, room, rootEventId, thread]);
 
-  // Get all events from live timeline
-  const allEvents = room.getLiveTimeline().getEvents();
-  const rootEvent = allEvents.find((e) => e.getId() === rootEventId);
-  const threadReplies = allEvents.filter((e) => e.threadRootId === rootEventId);
+  // Эффект 2: подписка на ThreadEvent.Update / NewReply — реактивные обновления
+  useEffect(() => {
+    const handleUpdate = () => syncCachedEvents();
+    const handleTimeline = (event: MatrixEvent, eventRoom?: Room) => {
+      if (eventRoom?.roomId !== room.roomId) return;
+      if (isThreadEvent(event, rootEventId)) syncCachedEvents();
+    };
 
-  if (allEvents.length === 0 || (!rootEvent && threadReplies.length === 0)) {
+    thread?.on(ThreadEvent.Update, handleUpdate);
+    thread?.on(ThreadEvent.NewReply, handleUpdate);
+    room.on(RoomEvent.Timeline, handleTimeline);
+    room.on(RoomEvent.LocalEchoUpdated, handleTimeline);
+
+    return () => {
+      thread?.off(ThreadEvent.Update, handleUpdate);
+      thread?.off(ThreadEvent.NewReply, handleUpdate);
+      room.off(RoomEvent.Timeline, handleTimeline);
+      room.off(RoomEvent.LocalEchoUpdated, handleTimeline);
+    };
+  }, [room, rootEventId, syncCachedEvents, thread]);
+
+  // Эффект 3: local echo — замена временного event ID на серверный
+  useEffect(() => {
+    const handleLocalEchoUpdated = (mEvent: MatrixEvent, eventRoom: Room) => {
+      if (eventRoom?.roomId !== room.roomId) return;
+      const relation = mEvent.getRelation?.();
+      const isOurThread =
+        (relation?.rel_type === 'm.thread' && relation?.event_id === rootEventId) ||
+        (relation?.rel_type === 'io.element.thread' && relation?.event_id === rootEventId) ||
+        mEvent.getId() === rootEventId;
+      if (isOurThread) syncCachedEvents();
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    room.on('Room.localEchoUpdated' as any, handleLocalEchoUpdated);
+    return () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      room.off('Room.localEchoUpdated' as any, handleLocalEchoUpdated);
+    };
+  }, [room, rootEventId, syncCachedEvents]);
+
+  if (isLoading) {
+    return (
+      <Box grow="Yes" alignItems="Center" justifyContent="Center">
+        Loading thread…
+      </Box>
+    );
+  }
+
+  // 2. Получаем ответы. thread.events содержит только ответы (и локальные эхо)
+  const threadReplies = threadEvents.filter(
+    (e) => e.getId() !== rootEventId && !reactionOrEditEvent(e)
+  );
+
+  // Если нет ни корня, ни ответов
+  if (!rootEvent && threadReplies.length === 0) {
     return (
       <Box grow="Yes" alignItems="Center" justifyContent="Center">
         Thread not found
@@ -126,11 +224,12 @@ export function ThreadTimeline({ room, rootEventId }: ThreadTimelineProps) {
     );
   }
 
+  const timelineSet = room.getUnfilteredTimelineSet();
+
   const renderMessage = (mEvent: MatrixEvent, idx: number) => {
     const mEventId = mEvent.getId();
     if (!mEventId) return null;
 
-    const timelineSet = room.getUnfilteredTimelineSet();
     const reactionRelations = getEventReactions(timelineSet, mEventId);
     const reactions = reactionRelations && reactionRelations.getSortedAnnotationsByKey();
     const hasReactions = reactions && reactions.length > 0;
@@ -193,7 +292,7 @@ export function ThreadTimeline({ room, rootEventId }: ThreadTimelineProps) {
           ) : undefined
         }
         hideReadReceipts={hideActivity}
-        showDeveloperTools={showDeveloperTools}
+        showDeveloperTools={false}
         memberPowerTag={getMemberPowerTag(senderId)}
         accessibleTagColors={accessibleTagColors}
         legacyUsernameColor={legacyUsernameColor || direct}

@@ -85,6 +85,51 @@ import { useSetActiveThread } from '../../../state/hooks/activeThread';
 
 export type ReactionHandler = (keyOrMxc: string, shortcode: string) => void;
 
+type ThreadBundledRelationship = {
+  count?: number;
+  latest_event?: {
+    event_id?: string;
+    sender?: string;
+    origin_server_ts?: number;
+    content?: {
+      body?: string;
+    };
+  };
+};
+
+const THREAD_REL_TYPES = ['m.thread', 'io.element.thread'];
+
+const getThreadRelationRootId = (event: MatrixEvent): string | undefined => {
+  if (event.threadRootId) return event.threadRootId;
+
+  const relation = event.getWireContent()?.['m.relates_to'];
+  return THREAD_REL_TYPES.includes(relation?.rel_type) ? relation?.event_id : undefined;
+};
+
+const getThreadBundledRelationship = (event: MatrixEvent): ThreadBundledRelationship | undefined => {
+  for (const relType of THREAD_REL_TYPES) {
+    const bundledRelationship = event.getServerAggregatedRelation<ThreadBundledRelationship>(relType);
+    if (bundledRelationship) return bundledRelationship;
+  }
+  return undefined;
+};
+
+const getThreadReplyCount = (room: Room, event: MatrixEvent): number => {
+  const eventId = event.getId();
+  if (!eventId) return 0;
+
+  const bundledCount = getThreadBundledRelationship(event)?.count;
+  if (typeof bundledCount === 'number') return bundledCount;
+
+  const thread = room.getThread(eventId);
+  if (thread?.length) return thread.length;
+
+  return room
+    .getLiveTimeline()
+    .getEvents()
+    .filter((e) => getThreadRelationRootId(e) === eventId).length;
+};
+
 type MessageQuickReactionsProps = {
   onReaction: ReactionHandler;
 };
@@ -818,14 +863,22 @@ export const Message = as<'div', MessageProps>(
       </AvatarBase>
     );
 
-    const isThreadedMessage = mEvent.threadRootId !== undefined;
+    const isThreadedMessage = getThreadRelationRootId(mEvent) !== undefined;
 
     // Check if this message is a thread root with replies
-    // Count replies from live timeline since SDK thread object may be empty
     const mEventId = mEvent.getId();
     const allEvents = room.getLiveTimeline().getEvents();
-    const threadReplies = mEventId ? allEvents.filter((e) => e.threadRootId === mEventId) : [];
-    const replyCount = threadReplies.length;
+    const sdkThreadEvents = mEventId ? room.getThread(mEventId)?.events ?? [] : [];
+    const threadReplies = mEventId
+      ? [...allEvents, ...sdkThreadEvents]
+          .filter((e) => getThreadRelationRootId(e) === mEventId)
+          .filter((event, index, events) =>
+            events.findIndex((e) => e.getId() === event.getId()) === index
+          )
+          .sort((a, b) => a.getTs() - b.getTs())
+      : [];
+
+    const replyCount = getThreadReplyCount(room, mEvent);
     const isThreadRoot = replyCount > 0 && !isThreadedMessage;
 
     const handleThreadClick: MouseEventHandler<HTMLButtonElement> = useCallback(() => {
@@ -837,12 +890,15 @@ export const Message = as<'div', MessageProps>(
     }, [setActiveThread, mEvent]);
 
     // Get last reply information for preview
+    const bundledRelationship = getThreadBundledRelationship(mEvent);
+    const bundledLatestEvent = bundledRelationship?.latest_event;
     const lastReply = threadReplies.length > 0 ? threadReplies[threadReplies.length - 1] : null;
-    const lastReplySender = lastReply?.getSender();
+    const lastReplySender = bundledLatestEvent?.sender ?? lastReply?.getSender();
     const lastReplyDisplayName = lastReplySender
       ? getMemberDisplayName(room, lastReplySender) ?? getMxIdLocalPart(lastReplySender) ?? lastReplySender
       : '';
-    const lastReplyContent = lastReply?.getContent()?.body ?? '';
+    const lastReplyContent =
+      bundledLatestEvent?.content?.body ?? lastReply?.getContent()?.body ?? '';
     const trimmedLastReply = lastReplyContent ? trimReplyFromBody(lastReplyContent) : '';
     const lastReplyAvatarMxc = lastReplySender ? getMemberAvatarMxc(room, lastReplySender) : null;
 
