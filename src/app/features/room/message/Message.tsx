@@ -902,6 +902,8 @@ export const Message = as<'div', MessageProps>(
     const trimmedLastReply = lastReplyContent ? trimReplyFromBody(lastReplyContent) : '';
     const lastReplyAvatarMxc = lastReplySender ? getMemberAvatarMxc(room, lastReplySender) : null;
 
+    const hasLastReplyPreview = !!(bundledLatestEvent?.sender || (lastReply && lastReplySender));
+
     const repliesButtonJSX = isThreadRoot ? (
       <Button
         size="300"
@@ -926,7 +928,7 @@ export const Message = as<'div', MessageProps>(
             <Icon size="50" src={Icons.Thread} />
             <Text size="T200">{replyCount} {replyCount === 1 ? 'reply' : 'replies'}</Text>
           </Box>
-          {lastReply && lastReplySender && (
+          {hasLastReplyPreview && (
             <>
               <Box shrink="No" style={{ opacity: config.opacity.P300 }}>
                 <Text size="T100">·</Text>
