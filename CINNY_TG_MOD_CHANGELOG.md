@@ -586,4 +586,60 @@
     ```
     Теперь парсер корректно захватывает символы внутри ссылок и поддерживает один уровень вложенности `\([^)(]*\)`, формируя правильный `href` без визуального мусора.
 
+## 18. Контекстно-зависимый Cmd+F (поиск по комнате vs глобальный)
+**Цель:** Сделать Cmd+F (Ctrl+F) контекстно-зависимым: в комнате — поиск сообщений, на Welcome Page — глобальный поиск.
+
+* **Поведение:**
+    | Где нажат Cmd+F | Результат |
+    |-----------------|-----------|
+    | Внутри комнаты (Home/Direct/Space) | Навигация на страницу поиска по этой комнате |
+    | Welcome Page / вне комнаты | Модальное окно глобального поиска |
+    | Открыта другая модалка | Ничего не происходит (защита) |
+
+* **Новые файлы:**
+    * `src/app/state/activeRoom.ts` — Jotai-атом `activeRoomIdAtom` (`string | null`), хранит ID активной комнаты
+* **Изменённые файлы:**
+    * `src/app/pages/client/home/RoomProvider.tsx` — `useEffect` устанавливает `activeRoomIdAtom` при входе в комнату, сбрасывает в `null` при выходе
+    * `src/app/pages/client/direct/RoomProvider.tsx` — аналогично для direct-комнат
+    * `src/app/pages/client/space/RoomProvider.tsx` — аналогично для space-комнат
+    * `src/app/features/search/Search.tsx` (`SearchModalRenderer`) — читает `activeRoomIdAtom`:
+        * Если `activeRoomId !== null` → `navigate(withSearchParam(getHomeSearchPath(), { rooms: activeRoomId }))` для Home/Direct или `navigate(withSearchParam(getSpaceSearchPath(spaceId), ...))` для Space
+        * Иначе → toggle глобальной модалки (`searchModalAtom`)
+    * Использованы refs (`activeRoomIdRef`, `pathnameRef`) для предотвращения перерегистрации event listener'а
+    * `decodeURIComponent()` для space ID из pathname (исправление двойного URL-кодирования)
+
+## 19. ESC и свайп для закрытия поиска по комнате
+**Цель:** Добавить навигацию назад (ESC / свайп) из страницы поиска сообщений с правильной иерархией: 1-й ESC → обратно в комнату, 2-й ESC → штатная логика комнаты (диалоги → тред → home).
+
+* **Поведение:**
+    | Ситуация | ESC/свайп |
+    |----------|-----------|
+    | Поиск по комнате (Home/Direct/Space) | `navigate(-1)` → возврат в комнату |
+    | В комнате после возврата | Штатная логика: диалоги → тред → home |
+    | В поиске + открыта модалка | ESC закрывает модалку, поиск остаётся |
+
+* **Изменённые файлы:**
+    * `src/app/hooks/useMacNavigation.ts` — добавлен опциональный параметр `navigateBack?: () => void`; если передан — используется вместо `navigate(getHomePath())` в Level 3
+    * `src/app/pages/client/home/Search.tsx` — добавлены `useKeyDown` (ESC → `navigate(-1)`) и `useMacNavigation(goBack)` (свайп → `navigate(-1)` + возврат `true` для потребления жеста, по аналогии с тредами в `Room.tsx`)
+    * `src/app/pages/client/space/Search.tsx` — аналогично
+
+## 20. Закрепление чатов (Pin/Unpin) — Telegram-style
+**Цель:** Добавить возможность закреплять любую комнату или DM в верхней части списка сайдбара (как в Telegram). Закреплённые чаты синхронизируются между устройствами через Matrix-тег `m.favourite`.
+
+* **Поведение:**
+    - ПКМ по комнате → меню → «Pin» / «Unpin»
+    - Закреплённые чаты отображаются вверху своей категории (DMs над списком Chats, группы над Rooms), между собой сортируются по времени последнего сообщения
+    - Иконка пина отображается рядом с названием закреплённой комнаты
+    - Данные хранятся через `mx.setRoomTag(roomId, 'm.favourite')` / `mx.deleteRoomTag(roomId, 'm.favourite')`
+
+* **Новые файлы:**
+    * `src/app/state/pinnedRooms.ts` — Jotai-атом `pinnedRoomsAtom: Set<string>` + хук `useBindPinnedRoomsAtom` с подпиской на `RoomEvent.Tags` (паттерн как в `mDirectList.ts`)
+    * `src/app/state/hooks/pinnedRooms.ts` — хуки `usePinnedRooms()`, `useIsRoomPinned(roomId)`, `useTogglePinRoom(roomId)`
+
+* **Изменённые файлы:**
+    * `src/app/state/hooks/useBindAtoms.ts` — привязка `useBindPinnedRoomsAtom` в корне приложения
+    * `src/app/utils/sort.ts` — новая функция `factoryRoomIdByPinnedThenActivity(mx, pinnedRooms)` — pinned rooms first, затем по активности
+    * `src/app/pages/client/home/Home.tsx` — DMs и Rooms сортируются через `factoryRoomIdByPinnedThenActivity`
+    * `src/app/features/room-nav/RoomNavItem.tsx` — пункт «Pin»/«Unpin» в контекстном меню (между Mark as Read и Notifications) + иконка `Icons.Pin` рядом с названием комнаты
+
 
