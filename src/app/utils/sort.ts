@@ -46,6 +46,17 @@ export const factoryRoomIdByActivity =
     return getReliableTimestamp(room2) - getReliableTimestamp(room1);
   };
 
+// Сортировка: pinned rooms first, then by activity
+export const factoryRoomIdByPinnedThenActivity =
+  (mx: MatrixClient, pinnedRooms: Set<string>): SortFunc<string> =>
+  (a, b) => {
+    const aPinned = pinnedRooms.has(a);
+    const bPinned = pinnedRooms.has(b);
+    if (aPinned && !bPinned) return -1;
+    if (!aPinned && bPinned) return 1;
+    return factoryRoomIdByActivity(mx)(a, b);
+  };
+
 export const factoryRoomIdByUnreadCount =
   (getUnreadCount: (roomId: string) => number): SortFunc<string> =>
   (a, b) => {

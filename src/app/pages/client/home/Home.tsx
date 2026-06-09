@@ -18,7 +18,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAtom, useAtomValue } from 'jotai';
 import FocusTrap from 'focus-trap-react';
-import { factoryRoomIdByActivity } from '../../../utils/sort';
+import { factoryRoomIdByActivity, factoryRoomIdByPinnedThenActivity } from '../../../utils/sort';
 import {
   NavButton,
   NavCategory,
@@ -46,6 +46,7 @@ import {
 } from '../../../hooks/router/useHomeSelected';
 import { useHomeRooms } from './useHomeRooms';
 import { useDirectRooms } from '../direct/useDirectRooms';
+import { usePinnedRooms } from '../../../state/hooks/pinnedRooms';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { VirtualTile } from '../../../components/virtualizer';
 import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
@@ -205,6 +206,7 @@ export function Home() {
   const dmRooms = useDirectRooms();
   const notificationPreferences = useRoomsNotificationPreferencesContext();
   const roomToUnread = useAtomValue(roomToUnreadAtom);
+  const pinnedRooms = usePinnedRooms();
   const navigate = useNavigate();
 
   const selectedRoomId = useSelectedRoom();
@@ -213,23 +215,27 @@ export function Home() {
   const noRoomToDisplay = rooms.length === 0 && dmRooms.length === 0;
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 
-  // DM rooms: sorted by activity, filtered when collapsed
+  // DM rooms: pinned first, then by activity, filtered when collapsed
   const sortedDms = useMemo(() => {
-    const items = Array.from(dmRooms).sort(factoryRoomIdByActivity(mx));
+    const items = Array.from(dmRooms).sort(
+      factoryRoomIdByPinnedThenActivity(mx, pinnedRooms)
+    );
     if (closedCategories.has(DM_CATEGORY_ID)) {
       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
     }
     return items;
-  }, [mx, dmRooms, closedCategories, roomToUnread, selectedRoomId]);
+  }, [mx, dmRooms, closedCategories, roomToUnread, selectedRoomId, pinnedRooms]);
 
-  // Group rooms: sorted chronologically by activity
+  // Group rooms: pinned first, then by activity
   const sortedRooms = useMemo(() => {
-    const items = Array.from(rooms).sort(factoryRoomIdByActivity(mx));
+    const items = Array.from(rooms).sort(
+      factoryRoomIdByPinnedThenActivity(mx, pinnedRooms)
+    );
     if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
     }
     return items;
-  }, [mx, rooms, closedCategories, roomToUnread, selectedRoomId]);
+  }, [mx, rooms, closedCategories, roomToUnread, selectedRoomId, pinnedRooms]);
 
   const dmVirtualizer = useVirtualizer({
     count: sortedDms.length,
