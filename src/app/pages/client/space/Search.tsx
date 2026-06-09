@@ -1,6 +1,8 @@
-import React, { useRef } from 'react';
-import { Box, Icon, Icons, Text, Scroll, IconButton } from 'folds';
+import React, { useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAtomValue } from 'jotai';
+import { isKeyHotkey } from 'is-hotkey';
+import { Box, Icon, Icons, Text, Scroll, IconButton } from 'folds';
 import { Page, PageContent, PageContentCenter, PageHeader } from '../../../components/page';
 import { MessageSearch } from '../../../features/message-search';
 import { useSpace } from '../../../hooks/useSpace';
@@ -11,12 +13,17 @@ import { roomToParentsAtom } from '../../../state/room/roomToParents';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../../components/BackRouteHandler';
+import { useKeyDown } from '../../../hooks/useKeyDown';
+import { useMacNavigation } from '../../../hooks/useMacNavigation';
+import { hasOpenDialogsAtom } from '../../../state/navigationStack';
 
 export function SpaceSearch() {
   const mx = useMatrixClient();
   const scrollRef = useRef<HTMLDivElement>(null);
   const space = useSpace();
   const screenSize = useScreenSizeContext();
+  const navigate = useNavigate();
+  const hasOpenDialogs = useAtomValue(hasOpenDialogsAtom);
 
   const mDirects = useAtomValue(mDirectAtom);
   const roomToParents = useAtomValue(roomToParentsAtom);
@@ -24,6 +31,22 @@ export function SpaceSearch() {
     allRoomsAtom,
     space.roomId,
     useRecursiveChildRoomScopeFactory(mx, mDirects, roomToParents)
+  );
+
+  const goBack = useCallback(() => navigate(-1), [navigate]);
+  useMacNavigation(undefined, goBack);
+
+  useKeyDown(
+    window,
+    useCallback(
+      (evt) => {
+        if (isKeyHotkey('escape', evt)) {
+          if (hasOpenDialogs) return;
+          goBack();
+        }
+      },
+      [hasOpenDialogs, goBack]
+    )
   );
 
   return (
