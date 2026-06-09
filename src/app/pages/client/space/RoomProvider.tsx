@@ -1,6 +1,6 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
 import { IsDirectRoomProvider, RoomProvider } from '../../../hooks/useRoom';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
@@ -13,6 +13,7 @@ import { useSearchParamsViaServers } from '../../../hooks/router/useSearchParams
 import { mDirectAtom } from '../../../state/mDirectList';
 import { settingsAtom } from '../../../state/settings';
 import { useSetting } from '../../../state/hooks/settings';
+import { activeRoomIdAtom } from '../../../state/activeRoom';
 
 export function SpaceRouteRoomProvider({ children }: { children: ReactNode }) {
   const mx = useMatrixClient();
@@ -27,8 +28,20 @@ export function SpaceRouteRoomProvider({ children }: { children: ReactNode }) {
   const roomId = useSelectedRoom();
   const room = mx.getRoom(roomId);
 
+  const setActiveRoomId = useSetAtom(activeRoomIdAtom);
+
+  useEffect(() => {
+    if (room && allRooms.includes(room.roomId)) {
+      setActiveRoomId(room.roomId);
+      return () => {
+        setActiveRoomId(null);
+      };
+    }
+  }, [room, allRooms, setActiveRoomId]);
+
   if (!room || !allRooms.includes(room.roomId)) {
     // room is not joined
+
     return (
       <JoinBeforeNavigate
         roomIdOrAlias={roomIdOrAlias!}

@@ -25,6 +25,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { isKeyHotkey } from 'is-hotkey';
 import { useAtom, useAtomValue } from 'jotai';
 import { Room } from 'matrix-js-sdk';
@@ -59,6 +60,9 @@ import { useKeyDown } from '../../hooks/useKeyDown';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { KeySymbol } from '../../utils/key-symbol';
 import { isMacOS } from '../../utils/user-agent';
+import { activeRoomIdAtom } from '../../state/activeRoom';
+import { getHomeSearchPath, getSpaceSearchPath, withSearchParam } from '../../pages/pathUtils';
+import { _SearchPathSearchParams } from '../../pages/paths';
 
 enum SearchRoomType {
   Rooms = '#',
@@ -422,6 +426,15 @@ export function Search({ requestClose }: SearchProps) {
 
 export function SearchModalRenderer() {
   const [opened, setOpen] = useAtom(searchModalAtom);
+  const activeRoomId = useAtomValue(activeRoomIdAtom);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const activeRoomIdRef = useRef(activeRoomId);
+  activeRoomIdRef.current = activeRoomId;
+
+  const pathnameRef = useRef(location.pathname);
+  pathnameRef.current = location.pathname;
 
   useKeyDown(
     window,
@@ -429,19 +442,34 @@ export function SearchModalRenderer() {
       (event) => {
         if (isKeyHotkey('mod+f', event)) {
           event.preventDefault();
-          if (opened) {
-            setOpen(false);
-            return;
-          }
 
           const portalContainer = document.getElementById('portalContainer');
           if (portalContainer && portalContainer.children.length > 0) {
             return;
           }
+
+          const currentActiveRoomId = activeRoomIdRef.current;
+          if (currentActiveRoomId) {
+            const searchParams: _SearchPathSearchParams = { rooms: currentActiveRoomId };
+            const pathname = pathnameRef.current;
+            if (pathname.startsWith('/home/') || pathname.startsWith('/direct/')) {
+              navigate(withSearchParam(getHomeSearchPath(), searchParams));
+            } else {
+              const spaceIdOrAlias = pathname.split('/')[1];
+              navigate(withSearchParam(getSpaceSearchPath(spaceIdOrAlias), searchParams));
+            }
+            return;
+          }
+
+          if (opened) {
+            setOpen(false);
+            return;
+          }
+
           setOpen(true);
         }
       },
-      [opened, setOpen]
+      [opened, setOpen, navigate]
     )
   );
 
