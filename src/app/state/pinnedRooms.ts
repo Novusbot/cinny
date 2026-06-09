@@ -1,5 +1,5 @@
 import { atom, useSetAtom } from 'jotai';
-import { MatrixClient, Room, RoomEvent } from 'matrix-js-sdk';
+import { MatrixClient, MatrixEvent, Room, RoomEvent } from 'matrix-js-sdk';
 import { useEffect } from 'react';
 
 export type PinnedRoomsAction = {
@@ -40,7 +40,7 @@ export const useBindPinnedRoomsAtom = (
       rooms: collectPinnedRoomIds(mx),
     });
 
-    const handleRoomTags = (_event: any, _room?: Room) => {
+    const handleRoomTags = (_event: MatrixEvent, _room?: Room) => {
       setPinned({
         type: 'UPDATE',
         rooms: collectPinnedRoomIds(mx),
