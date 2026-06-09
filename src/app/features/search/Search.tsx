@@ -455,7 +455,7 @@ export function SearchModalRenderer() {
             if (pathname.startsWith('/home/') || pathname.startsWith('/direct/')) {
               navigate(withSearchParam(getHomeSearchPath(), searchParams));
             } else {
-              const spaceIdOrAlias = pathname.split('/')[1];
+              const spaceIdOrAlias = decodeURIComponent(pathname.split('/')[1]);
               navigate(withSearchParam(getSpaceSearchPath(spaceIdOrAlias), searchParams));
             }
             return;
