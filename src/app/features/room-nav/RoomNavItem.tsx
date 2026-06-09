@@ -66,6 +66,7 @@ import classNames from 'classnames';
 import * as css from './styles.css';
 import { StateEvent } from '../../../types/matrix/room';
 import { webRTCSupported } from '../../utils/rtc';
+import { useIsRoomPinned, useTogglePinRoom } from '../../state/hooks/pinnedRooms';
 
 type RoomNavItemMenuProps = {
   room: Room;
@@ -86,6 +87,8 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
     const space = useSpaceOptionally();
 
     const [invitePrompt, setInvitePrompt] = useState(false);
+    const isPinned = useIsRoomPinned(room.roomId);
+    const togglePin = useTogglePinRoom(room.roomId);
 
     const handleMarkAsRead = () => {
       markAsRead(mx, room.roomId, hideActivity);
@@ -105,6 +108,11 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
 
     const handleRoomSettings = () => {
       openRoomSettings(room.roomId, space?.roomId);
+      requestClose();
+    };
+
+    const handleTogglePin = () => {
+      togglePin();
       requestClose();
     };
 
@@ -129,6 +137,16 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
           >
             <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
               Mark as Read
+            </Text>
+          </MenuItem>
+          <MenuItem
+            onClick={handleTogglePin}
+            size="300"
+            after={<Icon size="100" src={Icons.Pin} filled={isPinned} />}
+            radii="300"
+          >
+            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+              {isPinned ? 'Unpin' : 'Pin'}
             </Text>
           </MenuItem>
           <RoomNotificationModeSwitcher roomId={room.roomId} value={notificationMode}>
@@ -271,6 +289,7 @@ export function RoomNavItem({
   const isDirect = useIsDirectRoom();
   const myUserId = mx.getUserId();
   const lastMessage = useRoomLastMessage(room, isDirect, myUserId, mx, useAuthentication);
+  const isPinned = useIsRoomPinned(room.roomId);
 
   const handleContextMenu: MouseEventHandler<HTMLElement> = (evt) => {
     evt.preventDefault();
@@ -368,20 +387,25 @@ export function RoomNavItem({
                 minWidth: 0,
               }}
             >
-              <Text
-                priority={unread ? '500' : '300'}
-                as="span"
-                size="Inherit"
-                truncate
-                style={{
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  width: '100%',
-                }}
-              >
-                {roomName}
-              </Text>
+              <Box as="span" grow="Yes" alignItems="Center" gap="50">
+                {isPinned && (
+                  <Icon size="50" src={Icons.Pin} filled />
+                )}
+                <Text
+                  priority={unread ? '500' : '300'}
+                  as="span"
+                  size="Inherit"
+                  truncate
+                  style={{
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    width: '100%',
+                  }}
+                >
+                  {roomName}
+                </Text>
+              </Box>
               {lastMessage && (
                 <div
                   style={{
