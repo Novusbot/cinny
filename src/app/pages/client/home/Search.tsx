@@ -19,8 +19,11 @@ export function HomeSearch() {
   const navigate = useNavigate();
   const hasOpenDialogs = useAtomValue(hasOpenDialogsAtom);
 
-  const goBack = useCallback(() => navigate(-1), [navigate]);
-  useMacNavigation(undefined, goBack);
+  const goBack = useCallback(() => {
+    navigate(-1);
+    return true;
+  }, [navigate]);
+  useMacNavigation(goBack);
 
   useKeyDown(
     window,

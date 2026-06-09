@@ -33,8 +33,11 @@ export function SpaceSearch() {
     useRecursiveChildRoomScopeFactory(mx, mDirects, roomToParents)
   );
 
-  const goBack = useCallback(() => navigate(-1), [navigate]);
-  useMacNavigation(undefined, goBack);
+  const goBack = useCallback(() => {
+    navigate(-1);
+    return true;
+  }, [navigate]);
+  useMacNavigation(goBack);
 
   useKeyDown(
     window,
