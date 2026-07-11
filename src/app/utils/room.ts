@@ -19,6 +19,7 @@ import {
 } from 'matrix-js-sdk';
 import { CryptoBackend } from 'matrix-js-sdk/lib/common-crypto/CryptoBackend';
 import { AccountDataEvent } from '../../types/matrix/accountData';
+import { MARKED_UNREAD_EVENT_TYPE, isRoomMarkedUnread } from './markedUnread';
 import {
   IRoomCreateContent,
   Membership,
@@ -249,8 +250,13 @@ export const getUnreadInfos = (mx: MatrixClient): UnreadInfo[] => {
     if (room.getMyMembership() !== 'join') return unread;
     if (getNotificationType(mx, room.roomId) === NotificationType.Mute) return unread;
 
-    if (roomHaveNotification(room) || roomHaveUnread(mx, room)) {
-      unread.push(getUnreadInfo(room));
+    if (roomHaveNotification(room) || roomHaveUnread(mx, room) || isRoomMarkedUnread(room)) {
+      const info = getUnreadInfo(room);
+      // Ensure marked_unread rooms show at least 1 unread even without notifications
+      if (isRoomMarkedUnread(room) && info.total === 0) {
+        info.total = 1;
+      }
+      unread.push(info);
     }
 
     return unread;
