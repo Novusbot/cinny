@@ -19,7 +19,7 @@ import {
 } from 'folds';
 import { useFocusWithin, useHover } from 'react-aria';
 import FocusTrap from 'focus-trap-react';
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { NavItem, NavItemContent, NavItemOptions, NavLink } from '../../components/nav';
 import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
@@ -92,12 +92,18 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
     const togglePin = useTogglePinRoom(room.roomId);
 
     const isMarkedUnread = isRoomMarkedUnread(room);
+    const setUnreadAtom = useSetAtom(roomToUnreadAtom);
 
     const handleToggleMarkUnread = () => {
       if (isMarkedUnread || unread) {
         markAsRead(mx, room.roomId, hideActivity);
       } else {
         setRoomMarkedUnread(mx, room.roomId, true);
+        // Optimistically update unread atom for immediate badge feedback
+        setUnreadAtom({
+          type: 'PUT',
+          unreadInfo: { roomId: room.roomId, highlight: 0, total: 1 },
+        });
       }
       requestClose();
     };

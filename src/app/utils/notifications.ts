@@ -5,6 +5,11 @@ export async function markAsRead(mx: MatrixClient, roomId: string, privateReceip
   const room = mx.getRoom(roomId);
   if (!room) return;
 
+  // Always clear m.marked_unread when marking as read — must happen
+  // before the early returns below so the toggle works correctly even
+  // when the read receipt is already at the latest event.
+  await setRoomMarkedUnread(mx, roomId, false);
+
   const timeline = room.getLiveTimeline().getEvents();
   const readEventId = room.getEventReadUpTo(mx.getUserId()!);
 
@@ -24,6 +29,4 @@ export async function markAsRead(mx: MatrixClient, roomId: string, privateReceip
     latestEvent,
     privateReceipt ? ReceiptType.ReadPrivate : ReceiptType.Read
   );
-  // Clear m.marked_unread if it was previously set
-  await setRoomMarkedUnread(mx, roomId, false);
 }

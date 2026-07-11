@@ -45,6 +45,7 @@ import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
 import { markAsRead } from '../../utils/notifications';
 import { isRoomMarkedUnread, setRoomMarkedUnread } from '../../utils/markedUnread';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
+import { useSetAtom } from 'jotai';
 import { copyToClipboard } from '../../utils/dom';
 import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
 import { useRoomAvatar, useRoomName, useRoomTopic } from '../../hooks/useRoomMeta';
@@ -94,16 +95,22 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
 
   const [invitePrompt, setInvitePrompt] = useState(false);
 
-  const isMarkedUnread = isRoomMarkedUnread(room);
+    const isMarkedUnread = isRoomMarkedUnread(room);
+    const setUnreadAtom = useSetAtom(roomToUnreadAtom);
 
-  const handleToggleMarkUnread = () => {
-    if (isMarkedUnread || unread) {
-      markAsRead(mx, room.roomId, hideActivity);
-    } else {
-      setRoomMarkedUnread(mx, room.roomId, true);
-    }
-    requestClose();
-  };
+    const handleToggleMarkUnread = () => {
+      if (isMarkedUnread || unread) {
+        markAsRead(mx, room.roomId, hideActivity);
+      } else {
+        setRoomMarkedUnread(mx, room.roomId, true);
+        // Optimistically update unread atom for immediate badge feedback
+        setUnreadAtom({
+          type: 'PUT',
+          unreadInfo: { roomId: room.roomId, highlight: 0, total: 1 },
+        });
+      }
+      requestClose();
+    };
 
   const handleInvite = () => {
     setInvitePrompt(true);

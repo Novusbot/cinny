@@ -25,6 +25,7 @@ import {
   getUnreadInfos,
   isNotificationEvent,
 } from '../../utils/room';
+import { MARKED_UNREAD_EVENT_TYPE } from '../../utils/markedUnread';
 import { roomToParentsAtom } from './roomToParents';
 import { useStateEventCallback } from '../../hooks/useStateEventCallback';
 import { useSyncState } from '../../hooks/useSyncState';
@@ -262,6 +263,27 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
     mx.on(RoomEvent.MyMembership, handleMembershipChange);
     return () => {
       mx.removeListener(RoomEvent.MyMembership, handleMembershipChange);
+    };
+  }, [mx, setUnreadAtom]);
+
+  useEffect(() => {
+    const handleAccountData = (event: MatrixEvent, room: Room) => {
+      if (event.getType() !== MARKED_UNREAD_EVENT_TYPE) return;
+      if (room.isSpaceRoom()) return;
+
+      const content = event.getContent<{ unread?: boolean }>();
+      if (content?.unread === true) {
+        setUnreadAtom({
+          type: 'PUT',
+          unreadInfo: { roomId: room.roomId, highlight: 0, total: 1 },
+        });
+      } else {
+        setUnreadAtom({ type: 'DELETE', roomId: room.roomId });
+      }
+    };
+    mx.on(RoomEvent.AccountData, handleAccountData);
+    return () => {
+      mx.removeListener(RoomEvent.AccountData, handleAccountData);
     };
   }, [mx, setUnreadAtom]);
 
