@@ -43,6 +43,7 @@ import * as css from './RoomViewHeader.css';
 import { useRoomUnread } from '../../state/hooks/unread';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
 import { markAsRead } from '../../utils/notifications';
+import { isRoomMarkedUnread, setRoomMarkedUnread } from '../../utils/markedUnread';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { copyToClipboard } from '../../utils/dom';
 import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
@@ -93,8 +94,14 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
 
   const [invitePrompt, setInvitePrompt] = useState(false);
 
-  const handleMarkAsRead = () => {
-    markAsRead(mx, room.roomId, hideActivity);
+  const isMarkedUnread = isRoomMarkedUnread(room);
+
+  const handleToggleMarkUnread = () => {
+    if (isMarkedUnread || unread) {
+      markAsRead(mx, room.roomId, hideActivity);
+    } else {
+      setRoomMarkedUnread(mx, room.roomId, true);
+    }
     requestClose();
   };
 
@@ -129,14 +136,13 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
       )}
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
         <MenuItem
-          onClick={handleMarkAsRead}
+          onClick={handleToggleMarkUnread}
           size="300"
           after={<Icon size="100" src={Icons.CheckTwice} />}
           radii="300"
-          disabled={!unread}
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            Mark as Read
+            {isMarkedUnread || unread ? 'Mark as Read' : 'Mark as Unread'}
           </Text>
         </MenuItem>
         <RoomNotificationModeSwitcher roomId={room.roomId} value={notificationMode}>

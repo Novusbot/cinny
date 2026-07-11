@@ -1,4 +1,5 @@
 import { MatrixClient, ReceiptType } from 'matrix-js-sdk';
+import { setRoomMarkedUnread } from './markedUnread';
 
 export async function markAsRead(mx: MatrixClient, roomId: string, privateReceipt: boolean) {
   const room = mx.getRoom(roomId);
@@ -23,4 +24,6 @@ export async function markAsRead(mx: MatrixClient, roomId: string, privateReceip
     latestEvent,
     privateReceipt ? ReceiptType.ReadPrivate : ReceiptType.Read
   );
+  // Clear m.marked_unread if it was previously set
+  await setRoomMarkedUnread(mx, roomId, false);
 }
