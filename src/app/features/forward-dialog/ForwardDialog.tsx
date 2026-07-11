@@ -24,6 +24,7 @@ import {
   Avatar,
   MenuItem,
   Button,
+  TextArea,
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import { isKeyHotkey } from 'is-hotkey';
@@ -93,6 +94,9 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
 
   // Loading state for forwarding
   const [sendingRoomId, setSendingRoomId] = useState<string | null>(null);
+
+  // Optional comment to send alongside forwarded message
+  const [comment, setComment] = useState('');
 
   const handleSearchChange: ChangeEventHandler<HTMLInputElement> = (evt) => {
     const value = evt.currentTarget.value.trim();
@@ -178,7 +182,16 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
         }
         
         // Send message to target room
-        await mx.sendMessage(targetRoomId, content as any);
+        await mx.sendMessage(targetRoomId, content);
+
+        // Send optional comment as a separate standard text message
+        const trimmedComment = comment.trim();
+        if (trimmedComment) {
+          await mx.sendMessage(targetRoomId, {
+            msgtype: 'm.text',
+            body: trimmedComment,
+          });
+        }
 
         // Close dialog on success
         closeDialog();
@@ -192,7 +205,7 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
         setSendingRoomId(null);
       }
     },
-    [closeDialog, mx, state.eventToForward, sendingRoomId]
+    [closeDialog, mx, state.eventToForward, sendingRoomId, comment]
   );
 
   // Event preview
@@ -281,6 +294,19 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
                 before={<Icon size="200" src={Icons.Search} />}
                 onChange={handleSearchChange}
                 onKeyDown={handleKeyDown}
+              />
+            </Box>
+
+            {/* Comment */}
+            <Box style={{ padding: `${config.space.S200} ${config.space.S400} 0` }}>
+              <TextArea
+                size="400"
+                variant="SurfaceVariant"
+                radii="400"
+                placeholder="Добавить комментарий..."
+                value={comment}
+                onChange={(evt) => setComment(evt.currentTarget.value)}
+                disabled={sendingRoomId !== null}
               />
             </Box>
 
