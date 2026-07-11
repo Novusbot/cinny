@@ -98,6 +98,8 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
   // Optional comment to send alongside forwarded message
   const [comment, setComment] = useState('');
 
+  const [previewExpanded, setPreviewExpanded] = useState(false);
+
   const handleSearchChange: ChangeEventHandler<HTMLInputElement> = (evt) => {
     const value = evt.currentTarget.value.trim();
     if (value) {
@@ -218,12 +220,15 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
       const content = event.getContent();
       const clearContent = typeof event.getClearContent === 'function' ? event.getClearContent() : null;
       const body = clearContent?.body || content?.body || '';
-      text = body.length > 100 ? body.substring(0, 100) + '...' : body;
+      text = body;
     } catch {
       text = '[Message]';
     }
     return { sender, text };
   }, [state.eventToForward]);
+
+  const PREVIEW_MAX = 150;
+  const isLongPreview = eventPreview.text.length > PREVIEW_MAX;
 
   return (
     <Overlay open backdrop={<OverlayBackdrop />}>
@@ -255,35 +260,47 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
             </Header>
 
             {/* Preview */}
-            <Box style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
+            <Box style={{ padding: `0 ${config.space.S400} ${config.space.S200}` }}>
+              <Text size="T300" style={{ fontWeight: 600, marginBottom: toRem(6) }}>
+                Сообщение:
+              </Text>
               <Box
                 style={{
-                  padding: config.space.S200,
+                  padding: config.space.S300,
                   backgroundColor: 'var(--bg-surface-variant)',
                   borderRadius: toRem(8),
                 }}
               >
-                <Text size="T200" style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
+                <Text size="T200" style={{ fontWeight: 600, marginBottom: toRem(6) }}>
                   {eventPreview.sender}
                 </Text>
                 <Text
                   size="T300"
-                  style={{
-                    marginTop: toRem(4),
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                  }}
+                  style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
                 >
-                  {eventPreview.text || '[Empty message]'}
+                  {isLongPreview && !previewExpanded
+                    ? eventPreview.text.substring(0, PREVIEW_MAX) + '…'
+                    : eventPreview.text || '[Empty message]'}
                 </Text>
+                {isLongPreview && (
+                  <Button
+                    size="200"
+                    variant="Primary"
+                    fill="None"
+                    radii="Pill"
+                    onClick={() => setPreviewExpanded(!previewExpanded)}
+                    style={{ marginTop: toRem(8) }}
+                  >
+                    <Text size="T200">
+                      {previewExpanded ? 'Свернуть' : 'Показать полностью'}
+                    </Text>
+                  </Button>
+                )}
               </Box>
             </Box>
 
             {/* Search */}
-            <Box style={{ padding: `0 ${config.space.S400}` }}>
+            <Box style={{ padding: `0 ${config.space.S400} ${config.space.S200}` }}>
               <Input
                 ref={inputRef}
                 size="500"
@@ -298,11 +315,12 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
             </Box>
 
             {/* Comment */}
-            <Box style={{ padding: `${config.space.S200} ${config.space.S400} 0` }}>
+            <Box style={{ padding: `0 ${config.space.S400} ${config.space.S200}` }}>
               <TextArea
-                size="400"
+                size="500"
                 variant="SurfaceVariant"
                 radii="400"
+                resize="None"
                 placeholder="Добавить комментарий..."
                 value={comment}
                 onChange={(evt) => setComment(evt.currentTarget.value)}
