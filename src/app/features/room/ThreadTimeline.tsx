@@ -1,6 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Box, config, color } from 'folds';
 import { MatrixEvent, Room, RoomEvent, ThreadEvent } from 'matrix-js-sdk';
+import { HTMLReactParserOptions } from 'html-react-parser';
+import { Opts as LinkifyOpts } from 'linkifyjs';
 import { Message, Reactions } from '../room/message';
 import { RenderMessageContent } from '../../components/RenderMessageContent';
 import { RedactedContent } from '../../components/message/MsgTypeRenderers';
@@ -22,6 +24,16 @@ import { useImagePackRooms } from '../../hooks/useImagePackRooms';
 import { roomToParentsAtom } from '../../state/room/roomToParents';
 import { useAtomValue } from 'jotai';
 import { getEventReactions, getEditedEvent, reactionOrEditEvent } from '../../utils/room';
+import { useMentionClickHandler } from '../../hooks/useMentionClickHandler';
+import { useSpoilerClickHandler } from '../../hooks/useSpoilerClickHandler';
+import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+import {
+  factoryRenderLinkifyWithMention,
+  getReactCustomHtmlParser,
+  LINKIFY_OPTS,
+  makeMentionCustomProps,
+  renderMatrixMention,
+} from '../../plugins/react-custom-html-parser';
 import { Reply } from '../../components/message/Reply';
 import { EventType, Direction } from 'matrix-js-sdk';
 
@@ -81,6 +93,29 @@ export function ThreadTimeline({ room, rootEventId }: ThreadTimelineProps) {
   const accessibleTagColors = useAccessiblePowerTagColors(theme.kind, creatorsTag, powerLevelTags);
   const roomToParents = useAtomValue(roomToParentsAtom);
   const imagePackRooms = useImagePackRooms(room.roomId, roomToParents);
+  const useAuthentication = useMediaAuthentication();
+  const mentionClickHandler = useMentionClickHandler(room.roomId);
+  const spoilerClickHandler = useSpoilerClickHandler();
+
+  const linkifyOpts = useMemo<LinkifyOpts>(
+    () => ({
+      ...LINKIFY_OPTS,
+      render: factoryRenderLinkifyWithMention((href) =>
+        renderMatrixMention(mx, room.roomId, href, makeMentionCustomProps(mentionClickHandler))
+      ),
+    }),
+    [mx, room, mentionClickHandler]
+  );
+  const htmlReactParserOptions = useMemo<HTMLReactParserOptions>(
+    () =>
+      getReactCustomHtmlParser(mx, room.roomId, {
+        linkifyOpts,
+        useAuthentication,
+        handleSpoilerClick: spoilerClickHandler,
+        handleMentionClick: mentionClickHandler,
+      }),
+    [mx, room, linkifyOpts, spoilerClickHandler, mentionClickHandler, useAuthentication]
+  );
 
   const thread = room.getThread(rootEventId);
 
@@ -310,8 +345,8 @@ export function ThreadTimeline({ room, rootEventId }: ThreadTimelineProps) {
             getContent={getContent}
             mediaAutoLoad={mediaAutoLoad}
             urlPreview={showUrlPreview}
-            htmlReactParserOptions={{}}
-            linkifyOpts={{}}
+            htmlReactParserOptions={htmlReactParserOptions}
+            linkifyOpts={linkifyOpts}
             outlineAttachment={messageLayout === MessageLayout.Bubble}
           />
         )}
