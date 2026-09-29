@@ -109,6 +109,7 @@
 **Цель:** Добавить возможность пересылки сообщений в другие чаты, как в Telegram/Element.
 
 * **Новые файлы:**
+    * `src/app/features/forward-dialog/forwardHeader.ts` — чистая функция `buildForwardHeader()` для заголовка «Переслано от …»
     * `src/app/features/forward-dialog/ForwardDialog.tsx` — основной компонент диалога
     * `src/app/features/forward-dialog/ForwardDialogRenderer.tsx` — рендерер для глобального подключения
     * `src/app/features/forward-dialog/index.ts` — экспорты
@@ -143,9 +144,15 @@
     * **Очистка связей:** Удаляется `m.relates_to` чтобы сообщение не было привязано к старому треду
     * **Пометка "Переслано от...":**
         * Для текстовых сообщений (`m.text`, `m.notice`, `m.emote`) добавляется заголовок
-        * Формат: `Переслано от {senderName} из {roomName}`
-        * HTML версия с активной ссылкой на оригинал: `https://matrix.to/#/{roomId}/{eventId}`
-        * Cinny автоматически перехватывает эти ссылки и показывает оригинал
+        * Сборка заголовка вынесена в `src/app/features/forward-dialog/forwardHeader.ts` → `buildForwardHeader()`
+        * **Групповая комната:** `Переслано от {senderName} из {roomName}`, ссылка на комнату — `getMatrixToRoomEvent(roomId, eventId, getViaServers(room))` (c via-серверами, иначе получатель не сможет зайти)
+        * **Личный чат (DM):** название комнаты в личке равно имени собеседника, поэтому `из {имя}` читалось как "из Сергей". В DM остаётся только `Переслано от @{senderName}`, а имя ведёт на профиль (`https://matrix.to/#/{userId}`) — приватный room ID наружу не утекает
+        * **Комната не загружена** (покинута/не в клиенте) — та же ветка DM, только профиль
+        * **Имя отправителя:** `getSenderName()` в том же модуле — 1) `getMemberDisplayName(room, senderId)` (state комнаты) → 2) `event.sender.name` (имя, распознанное SDK) → 3) localpart mxid как последний фолбэк. Раньше использовался только `split(':')[0]`, поэтому в заголовок попадало `@i.dugalev` вместо «Иван Дугалев»
+        * DM определяется так же, как в сайдбаре (`useRoomLastMessage.ts`): `m.direct` **или** ровно 2 участника в комнате
+        * Cinny автоматически перехватывает ссылки `matrix.to` (`useMentionClickHandler`) и открывает оригинал; для не-участника показывается экран `JoinBeforeNavigate` с кнопкой Join
+        * Имена проходят через `sanitizeText()` — HTML-инъекция через display name невозможна
+        * **Имя в самом чате:** `renderMatrixMention()` (ветка user-mention) брала имя только из state **текущей** комнаты, поэтому пересланное сообщение в комнате, где автора нет среди участников, показывало `@i.dugalev`. Вынесено в `src/app/plugins/mentionLabel.ts` → `resolveUserMentionLabel()`: 1) display name участника текущей комнаты → 2) текст самой ссылки (без ведущего `@`) → 3) localpart mxid
     * **Обратная связь:** Текст кнопки меняется на "Отправка..." во время отправки
     * **Обработка ошибок:** `try/catch` с логом ошибки
 

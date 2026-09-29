@@ -42,6 +42,7 @@ import { RoomAvatar } from '../../components/room-avatar';
 import { useAsyncSearch, UseAsyncSearchOptions } from '../../hooks/useAsyncSearch';
 import { useAtomValue } from 'jotai';
 import { getMxIdLocalPart } from '../../utils/matrix';
+import { buildForwardHeader } from './forwardHeader';
 
 const SEARCH_OPTIONS: UseAsyncSearchOptions = {
   limit: 50,
@@ -155,23 +156,23 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
 
         // Add "Forwarded from..." header for text messages
         if (content.msgtype === 'm.text' || content.msgtype === 'm.notice' || content.msgtype === 'm.emote') {
-          // Gather original message info
           const originalRoomId = event.getRoomId();
-          const originalEventId = event.getId();
-          const senderName = event.sender?.name || event.getSender()?.split(':')[0] || 'Unknown';
           const originalRoom = mx.getRoom(originalRoomId);
-          const roomName = originalRoom?.name || originalRoomId || 'комнаты';
 
-          // Universal Matrix link that Cinny will intercept
-          const messageLink = `https://matrix.to/#/${originalRoomId}/${originalEventId}`;
+          // Личка определяется так же, как в сайдбаре (useRoomLastMessage.ts):
+          // помечена в m.direct ИЛИ в комнате ровно два участника.
+          const isDirectRoom =
+            mDirects.has(originalRoomId) || (originalRoom?.getJoinedMemberCount() ?? 0) === 2;
 
-          // Text and HTML versions of the header
-          const forwardText = `Переслано от ${senderName} из ${roomName}\n`;
-          // Ссылка на название комнаты (ведет на оригинальное сообщение)
-          // Using <sup>+<font> for tiny superscript styling (Matrix-compatible, no style attribute)
-          const forwardHtml = `<sup><font color="#888888"><em>Переслано от:</em> ${senderName} <em>из <a href="${messageLink}">${roomName}</a></em></font></sup><br/>`;
+          const { text: forwardText, html: forwardHtml } = buildForwardHeader({
+            room: originalRoom,
+            roomId: originalRoomId,
+            eventId: event.getId(),
+            senderId: event.getSender(),
+            senderName: event.sender?.name,
+            isDirectRoom,
+          });
 
-          // Preserve original text
           const originalBody = content.body || '';
           const originalHtml = content.formatted_body || originalBody;
 
@@ -207,7 +208,7 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
         setSendingRoomId(null);
       }
     },
-    [closeDialog, mx, state.eventToForward, sendingRoomId, comment]
+    [closeDialog, mx, mDirects, state.eventToForward, sendingRoomId, comment]
   );
 
   // Event preview

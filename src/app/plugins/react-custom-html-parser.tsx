@@ -23,12 +23,12 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { ChildNode } from 'domhandler';
 import * as css from '../styles/CustomHtml.css';
 import {
-  getMxIdLocalPart,
   getCanonicalAliasRoomId,
   isRoomAlias,
   mxcUrlToHttp,
 } from '../utils/matrix';
 import { getMemberDisplayName } from '../utils/room';
+import { resolveUserMentionLabel } from './mentionLabel';
 import { EMOJI_PATTERN, sanitizeForRegex, URL_NEG_LB } from '../utils/regex';
 import { getHexcodeForEmoji, getShortcodeFor } from './emoji';
 import { findAndReplace } from '../utils/findAndReplace';
@@ -80,6 +80,10 @@ export const renderMatrixMention = (
   const userId = parseMatrixToUser(href);
   if (userId) {
     const currentRoom = mx.getRoom(currentRoomId);
+    const memberName = currentRoom && getMemberDisplayName(currentRoom, userId);
+    const rawName = customProps.children;
+    const linkName = typeof rawName === 'string' ? rawName : undefined;
+    const displayName = resolveUserMentionLabel(memberName, linkName, userId);
 
     return (
       <a
@@ -88,9 +92,7 @@ export const renderMatrixMention = (
         className={css.Mention({ highlight: mx.getUserId() === userId })}
         data-mention-id={userId}
       >
-        {`@${
-          (currentRoom && getMemberDisplayName(currentRoom, userId)) ?? getMxIdLocalPart(userId)
-        }`}
+        {`@${displayName}`}
       </a>
     );
   }
