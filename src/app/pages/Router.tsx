@@ -64,6 +64,7 @@ import { SpaceSettingsRenderer } from '../features/space-settings';
 import { UserRoomProfileRenderer } from '../components/UserRoomProfileRenderer';
 import { CreateRoomModalRenderer } from '../features/create-room';
 import { ForwardDialogRenderer } from '../features/forward-dialog';
+import { CreateChatModalRenderer } from '../features/create-chat';
 import { InsertLinkDialogRenderer } from '../features/insert-link-dialog';
 import { HomeCreateRoom } from './client/home/CreateRoom';
 import { Create } from './client/create';
@@ -144,6 +145,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
                       <UserRoomProfileRenderer />
                       <CreateRoomModalRenderer />
                       <ForwardDialogRenderer />
+                      <CreateChatModalRenderer />
                       <InsertLinkDialogRenderer />
                       <CreateSpaceModalRenderer />
                       <RoomSettingsRenderer />

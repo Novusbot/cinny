@@ -273,6 +273,10 @@ Upstream десктопа всегда `main`.
 ### Поиск и коммуникации
 - `src/app/features/search/Search.tsx` (переназначен hotkey с Cmd+K на Cmd+F)
 - `src/app/plugins/markdown/inline/rules.ts` (regex для ссылок со скобками)
+- `src/app/features/search/PeopleSearch.tsx` (поиск людей: слияние локального справочника и user_directory)
+- `src/app/hooks/useKnownUsers.ts`, `src/app/hooks/useUserDirectorySearch.ts` (источники данных для поиска людей)
+- `src/app/features/create-chat/CreateChatDialog.tsx` (модалка создания чата из поиска людей)
+- `src/app/state/createChatModal.ts`, `src/app/state/hooks/createChatModal.ts` (состояние модалки чата)
 
 ### Конфигурация
 - `config.json` (homeservers, featured communities) — **наш**, не перезаписывать upstream
