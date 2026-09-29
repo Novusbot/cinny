@@ -136,6 +136,9 @@ export function ThreadTimeline({ room, rootEventId }: ThreadTimelineProps) {
   );
   const [threadEvents, setThreadEvents] = useState<MatrixEvent[]>(getCachedThreadEvents);
   const [isLoading, setIsLoading] = useState(true);
+  // Счётчик принудительного ре-рендера: m.annotation/m.replace не проходят
+  // isThreadEvent, поэтому иначе тред не перерисовывается на реакциях.
+  const [, setRelationsTick] = useState(0);
 
   const syncCachedEvents = useCallback(() => {
     setRootEvent(thread?.rootEvent ?? room.findEventById(rootEventId));
@@ -182,6 +185,15 @@ export function ThreadTimeline({ room, rootEventId }: ThreadTimelineProps) {
         console.warn('[ThreadTimeline] mx.relations failed:', e);
       } finally {
         if (!isUnmounted) {
+          // Собственный /relations-фетч обходит SDK, поэтому relation-события
+          // (m.annotation, m.replace) из его ответа никто не агрегирует.
+          // Прогоняем их через room.relations вручную: идемпотентно, Relations
+          // дедуплицирует по event_id.
+          const timelineSet = room.getUnfilteredTimelineSet();
+          loadedEvents
+            .filter((e) => reactionOrEditEvent(e))
+            .forEach((e) => room.relations.aggregateChildEvent(e, timelineSet));
+
           const cachedEvents = getCachedThreadEvents();
           setRootEvent(loadedRootEvent ?? thread?.rootEvent ?? room.findEventById(rootEventId));
           const mergedEvents = mergeThreadEvents(
@@ -212,12 +224,21 @@ export function ThreadTimeline({ room, rootEventId }: ThreadTimelineProps) {
     thread?.on(ThreadEvent.NewReply, handleUpdate);
     room.on(RoomEvent.Timeline, handleTimeline);
     room.on(RoomEvent.LocalEchoUpdated, handleTimeline);
+    // Реакции и правки не являются событиями треда — реагируем на все события
+    // комнаты без фильтра.
+    const handleRelationsChange = () => setRelationsTick((t) => t + 1);
+    room.on(RoomEvent.Redaction, handleRelationsChange);
+    room.on(RoomEvent.Timeline, handleRelationsChange);
+    room.on(RoomEvent.LocalEchoUpdated, handleRelationsChange);
 
     return () => {
       thread?.off(ThreadEvent.Update, handleUpdate);
       thread?.off(ThreadEvent.NewReply, handleUpdate);
       room.off(RoomEvent.Timeline, handleTimeline);
       room.off(RoomEvent.LocalEchoUpdated, handleTimeline);
+      room.off(RoomEvent.Redaction, handleRelationsChange);
+      room.off(RoomEvent.Timeline, handleRelationsChange);
+      room.off(RoomEvent.LocalEchoUpdated, handleRelationsChange);
     };
   }, [room, rootEventId, syncCachedEvents, thread]);
 
