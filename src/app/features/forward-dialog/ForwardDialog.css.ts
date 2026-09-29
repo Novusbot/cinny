@@ -4,10 +4,15 @@ import { color, config, toRem } from 'folds';
 /**
  * Modal из folds задаёт только max-width/max-height. Без min-width содержимое
  * сжимается до ширины самого узкого слова, и строка поиска схлопывается.
+ * Высота фиксирована пропорционально окну (70vh): иначе при height:auto
+ * список с flexBasis:0 схлопывается и видна только полоска чатов.
  */
 export const ForwardDialogModal = style({
   minWidth: toRem(440),
   maxWidth: toRem(460),
+  width: '100%',
+  height: '70vh',
+  minHeight: toRem(400),
   maxHeight: '80vh',
 });
 
@@ -19,6 +24,7 @@ export const ForwardDialogHeader = style({
 /* --- Превью сообщения ------------------------------------------------- */
 
 export const ForwardDialogPreview = style({
+  flexShrink: 0,
   margin: `${config.space.S300} ${config.space.S400} 0`,
   padding: config.space.S300,
   gap: config.space.S100,
@@ -50,17 +56,28 @@ export const ForwardDialogPreviewText = style({
 /* --- Поиск и комментарий --------------------------------------------- */
 
 export const ForwardDialogSearch = style({
+  flexShrink: 0,
   padding: `${config.space.S400} ${config.space.S400} 0`,
 });
 
 export const ForwardDialogComment = style({
+  flexShrink: 0,
   padding: `${config.space.S300} ${config.space.S400} 0`,
+});
+
+/** Комментарий — растёт под текст до ~5 строк, дальше скролл внутри поля. */
+export const ForwardDialogCommentInput = style({
+  width: '100%',
+  maxHeight: toRem(132),
+  overflowY: 'auto',
 });
 
 /* --- Список комнат ---------------------------------------------------- */
 
 export const ForwardDialogList = style({
   flexGrow: 1,
+  flexShrink: 1,
+  flexBasis: 0,
   minHeight: 0,
   padding: config.space.S300,
 });

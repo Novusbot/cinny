@@ -3,6 +3,7 @@ import React, {
   KeyboardEventHandler,
   MouseEventHandler,
   useCallback,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -55,6 +56,9 @@ const SEARCH_OPTIONS: UseAsyncSearchOptions = {
     contain: true,
   },
 };
+
+/** Макс. высота поля комментария (~5 строк) — дальше включается скролл. */
+const COMMENT_MAX_HEIGHT = 132;
 
 type ForwardDialogProps = {
   state: ForwardDialogState;
@@ -124,6 +128,16 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
 
   // Optional comment to send alongside forwarded message
   const [comment, setComment] = useState('');
+
+  // Авторесайз поля комментария: растёт под текст до лимита, дальше скролл.
+  const commentRef = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = commentRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, COMMENT_MAX_HEIGHT)}px`;
+    el.style.overflowY = el.scrollHeight > COMMENT_MAX_HEIGHT ? 'auto' : 'hidden';
+  }, [comment]);
 
   const [sendError, setSendError] = useState<string | undefined>();
 
@@ -322,7 +336,7 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
 
             {/* Preview */}
             {eventPreview.text && (
-              <Box className={css.ForwardDialogPreview} direction="Column">
+              <Box shrink="No" className={css.ForwardDialogPreview} direction="Column">
                 <Text as="span" size="T200" className={css.ForwardDialogPreviewText}>
                   {eventPreview.text}
                 </Text>
@@ -335,7 +349,7 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
             )}
 
             {/* Search */}
-            <Box className={css.ForwardDialogSearch}>
+            <Box shrink="No" className={css.ForwardDialogSearch} direction="Column">
               <Input
                 ref={inputRef}
                 className={css.ForwardDialogInput}
@@ -351,8 +365,10 @@ export function ForwardDialog({ state }: ForwardDialogProps) {
             </Box>
 
             {/* Comment */}
-            <Box className={css.ForwardDialogComment}>
+            <Box shrink="No" className={css.ForwardDialogComment} direction="Column">
               <TextArea
+                ref={commentRef}
+                className={css.ForwardDialogCommentInput}
                 size="400"
                 variant="SurfaceVariant"
                 radii="400"
