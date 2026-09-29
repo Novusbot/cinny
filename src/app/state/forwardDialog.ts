@@ -2,7 +2,7 @@ import { atom } from 'jotai';
 import { MatrixEvent } from 'matrix-js-sdk';
 
 export type ForwardDialogState = {
-  eventToForward: MatrixEvent;
+  eventsToForward: MatrixEvent[];
   roomId: string;
 };
 

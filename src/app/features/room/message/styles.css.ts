@@ -7,6 +7,11 @@ export const MessageBase = style({
 export const MessageBaseBubbleCollapsed = style({
   paddingTop: 0,
 });
+// В режиме выбора слева резервируется «желоб» под чекбокс,
+// иначе галочка наезжала бы на время/ник сообщения.
+export const MessageBaseSelecting = style({
+  paddingLeft: toRem(44),
+});
 
 export const MessageOptionsBase = style([
   DefaultReset,
@@ -21,6 +26,15 @@ export const MessageOptionsBar = style([
   DefaultReset,
   {
     padding: config.space.S100,
+  },
+]);
+export const MessageSelectionCheckbox = style([
+  DefaultReset,
+  {
+    position: 'absolute',
+    left: toRem(10),
+    top: toRem(7),
+    zIndex: 1,
   },
 ]);
 

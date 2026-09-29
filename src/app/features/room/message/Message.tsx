@@ -2,6 +2,7 @@ import {
   Avatar,
   Box,
   Button,
+  Checkbox,
   Dialog,
   Header,
   Icon,
@@ -82,6 +83,11 @@ import colorMXID from '../../../../util/colorMXID';
 import { getPowerTagIconSrc } from '../../../hooks/useMemberPowerTag';
 import { useOpenForwardDialog } from '../../../state/hooks/forwardDialog';
 import { useSetActiveThread } from '../../../state/hooks/activeThread';
+import { useMessageSelection } from '../../../state/hooks/messageSelection';
+import { MessageDeletePrompt } from './MessageDeletePrompt';
+
+// Глот для отклонённых промисов: состояние ошибки живёт в deleteState.
+const noop = (): void => undefined;
 
 export type ReactionHandler = (keyOrMxc: string, shortcode: string) => void;
 
@@ -106,9 +112,12 @@ const getThreadRelationRootId = (event: MatrixEvent): string | undefined => {
   return THREAD_REL_TYPES.includes(relation?.rel_type) ? relation?.event_id : undefined;
 };
 
-const getThreadBundledRelationship = (event: MatrixEvent): ThreadBundledRelationship | undefined => {
+const getThreadBundledRelationship = (
+  event: MatrixEvent
+): ThreadBundledRelationship | undefined => {
   for (const relType of THREAD_REL_TYPES) {
-    const bundledRelationship = event.getServerAggregatedRelation<ThreadBundledRelationship>(relType);
+    const bundledRelationship =
+      event.getServerAggregatedRelation<ThreadBundledRelationship>(relType);
     if (bundledRelationship) return bundledRelationship;
   }
   return undefined;
@@ -456,19 +465,12 @@ export const MessageDeleteItem = as<
     )
   );
 
-  const handleSubmit: FormEventHandler<HTMLFormElement> = (evt) => {
-    evt.preventDefault();
-    const eventId = mEvent.getId();
-    if (
-      !eventId ||
-      deleteState.status === AsyncStatus.Loading ||
-      deleteState.status === AsyncStatus.Success
-    )
-      return;
-    const target = evt.target as HTMLFormElement | undefined;
-    const reasonInput = target?.reasonInput as HTMLInputElement | undefined;
-    const reason = reasonInput && reasonInput.value.trim();
-    deleteMessage(eventId, reason);
+  const eventId = mEvent.getId();
+
+  const handleConfirm = (reason: string) => {
+    if (!eventId) return;
+    // Ошибка хранится в deleteState и показывается в диалоге, нужен только глот.
+    deleteMessage(eventId, reason.trim() || undefined).catch(noop);
   };
 
   const handleClose = () => {
@@ -478,75 +480,18 @@ export const MessageDeleteItem = as<
 
   return (
     <>
-      <Overlay open={open} backdrop={<OverlayBackdrop />}>
-        <OverlayCenter>
-          <FocusTrap
-            focusTrapOptions={{
-              initialFocus: false,
-              onDeactivate: handleClose,
-              clickOutsideDeactivates: true,
-              escapeDeactivates: stopPropagation,
-            }}
-          >
-            <Dialog variant="Surface">
-              <Header
-                style={{
-                  padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
-                  borderBottomWidth: config.borderWidth.B300,
-                }}
-                variant="Surface"
-                size="500"
-              >
-                <Box grow="Yes">
-                  <Text size="H4">Delete Message</Text>
-                </Box>
-                <IconButton size="300" onClick={handleClose} radii="300">
-                  <Icon src={Icons.Cross} />
-                </IconButton>
-              </Header>
-              <Box
-                as="form"
-                onSubmit={handleSubmit}
-                style={{ padding: config.space.S400 }}
-                direction="Column"
-                gap="400"
-              >
-                <Text priority="400">
-                  This action is irreversible! Are you sure that you want to delete this message?
-                </Text>
-                <Box direction="Column" gap="100">
-                  <Text size="L400">
-                    Reason{' '}
-                    <Text as="span" size="T200">
-                      (optional)
-                    </Text>
-                  </Text>
-                  <Input name="reasonInput" variant="Background" />
-                  {deleteState.status === AsyncStatus.Error && (
-                    <Text style={{ color: color.Critical.Main }} size="T300">
-                      Failed to delete message! Please try again.
-                    </Text>
-                  )}
-                </Box>
-                <Button
-                  type="submit"
-                  variant="Critical"
-                  before={
-                    deleteState.status === AsyncStatus.Loading ? (
-                      <Spinner fill="Solid" variant="Critical" size="200" />
-                    ) : undefined
-                  }
-                  aria-disabled={deleteState.status === AsyncStatus.Loading}
-                >
-                  <Text size="B400">
-                    {deleteState.status === AsyncStatus.Loading ? 'Deleting...' : 'Delete'}
-                  </Text>
-                </Button>
-              </Box>
-            </Dialog>
-          </FocusTrap>
-        </OverlayCenter>
-      </Overlay>
+      <MessageDeletePrompt
+        open={open && deleteState.status !== AsyncStatus.Success}
+        count={1}
+        deleting={deleteState.status === AsyncStatus.Loading}
+        error={
+          deleteState.status === AsyncStatus.Error
+            ? 'Не удалось удалить сообщение! Попробуйте ещё раз.'
+            : undefined
+        }
+        onCancel={handleClose}
+        onConfirm={handleConfirm}
+      />
       <Button
         variant="Critical"
         fill="None"
@@ -762,6 +707,7 @@ export const Message = as<'div', MessageProps>(
       hour24Clock,
       dateFormatString,
       children,
+      onClick: onClickProp,
       ...props
     },
     ref
@@ -771,6 +717,13 @@ export const Message = as<'div', MessageProps>(
     const senderId = mEvent.getSender() ?? '';
     const openForwardDialog = useOpenForwardDialog();
     const setActiveThread = useSetActiveThread();
+    const selection = useMessageSelection(room.roomId);
+    // Выбирать можно только то, что разрешено удалить: иначе корзина в панели
+    // дала бы 403 на чужих сообщениях без видимой причины.
+    const isSelectable = Boolean(canDelete) && !edit && !mEvent.isRedacted();
+    const mEventIdOrUndefined = mEvent.getId();
+    const eventIdForSelection = mEventIdOrUndefined ?? undefined;
+    const selected = isSelectable && selection.isSelected(eventIdForSelection);
 
     const [hover, setHover] = useState(false);
     const { hoverProps } = useHover({ onHoverChange: setHover });
@@ -872,8 +825,8 @@ export const Message = as<'div', MessageProps>(
     const threadReplies = mEventId
       ? [...allEvents, ...sdkThreadEvents]
           .filter((e) => getThreadRelationRootId(e) === mEventId)
-          .filter((event, index, events) =>
-            events.findIndex((e) => e.getId() === event.getId()) === index
+          .filter(
+            (event, index, events) => events.findIndex((e) => e.getId() === event.getId()) === index
           )
           .sort((a, b) => a.getTs() - b.getTs())
       : [];
@@ -895,7 +848,9 @@ export const Message = as<'div', MessageProps>(
     const lastReply = threadReplies.length > 0 ? threadReplies[threadReplies.length - 1] : null;
     const lastReplySender = bundledLatestEvent?.sender ?? lastReply?.getSender();
     const lastReplyDisplayName = lastReplySender
-      ? getMemberDisplayName(room, lastReplySender) ?? getMxIdLocalPart(lastReplySender) ?? lastReplySender
+      ? getMemberDisplayName(room, lastReplySender) ??
+        getMxIdLocalPart(lastReplySender) ??
+        lastReplySender
       : '';
     const lastReplyContent =
       bundledLatestEvent?.content?.body ?? lastReply?.getContent()?.body ?? '';
@@ -913,11 +868,7 @@ export const Message = as<'div', MessageProps>(
         className={css.ThreadSummaryButton}
         onClick={handleThreadClick}
       >
-        <Box
-          gap="200"
-          alignItems="Center"
-          className={css.ThreadSummaryContent}
-        >
+        <Box gap="200" alignItems="Center" className={css.ThreadSummaryContent}>
           <Box
             shrink="No"
             gap="100"
@@ -926,7 +877,9 @@ export const Message = as<'div', MessageProps>(
             className={css.ThreadSummaryCountBox}
           >
             <Icon size="50" src={Icons.Thread} />
-            <Text size="T200">{replyCount} {replyCount === 1 ? 'reply' : 'replies'}</Text>
+            <Text size="T200">
+              {replyCount} {replyCount === 1 ? 'reply' : 'replies'}
+            </Text>
           </Box>
           {hasLastReplyPreview && (
             <>
@@ -934,15 +887,13 @@ export const Message = as<'div', MessageProps>(
                 <Text size="T100">·</Text>
               </Box>
               <AvatarBase className={css.ThreadSummaryAvatarBase}>
-                <Avatar
-                  size="200"
-                  style={{ cursor: 'default' }}
-                >
+                <Avatar size="200" style={{ cursor: 'default' }}>
                   <UserAvatar
                     userId={lastReplySender}
                     src={
                       lastReplyAvatarMxc
-                        ? mxcUrlToHttp(mx, lastReplyAvatarMxc, useAuthentication, 32, 32, 'crop') ?? undefined
+                        ? mxcUrlToHttp(mx, lastReplyAvatarMxc, useAuthentication, 32, 32, 'crop') ??
+                          undefined
                         : undefined
                     }
                     alt={lastReplyDisplayName}
@@ -950,11 +901,7 @@ export const Message = as<'div', MessageProps>(
                   />
                 </Avatar>
               </AvatarBase>
-              <Text
-                size="T200"
-                truncate
-                className={css.ThreadSummaryPreviewText}
-              >
+              <Text size="T200" truncate className={css.ThreadSummaryPreviewText}>
                 <b>{lastReplyDisplayName}</b>
                 {trimmedLastReply ? `: ${trimmedLastReply}` : ''}
               </Text>
@@ -988,6 +935,13 @@ export const Message = as<'div', MessageProps>(
     );
 
     const handleContextMenu: MouseEventHandler<HTMLDivElement> = (evt) => {
+      if (selection.isActive) {
+        // В режиме выбора ПКМ переключает выбор, а не открывает меню.
+        if (!isSelectable) return;
+        evt.preventDefault();
+        selection.toggle(mEvent);
+        return;
+      }
       if (evt.altKey || !window.getSelection()?.isCollapsed || edit) return;
       const tag = (evt.target as any).tagName;
       if (typeof tag === 'string' && tag.toLowerCase() === 'a') return;
@@ -998,6 +952,16 @@ export const Message = as<'div', MessageProps>(
         width: 0,
         height: 0,
       });
+    };
+
+    const handleRowClick: MouseEventHandler<HTMLDivElement> = (evt) => {
+      // Чужой onClick вызываем всегда, выбор — только как побочный эффект.
+      onClickProp?.(evt);
+      if (!selection.isActive || edit || !isSelectable) return;
+      if (!window.getSelection()?.isCollapsed) return;
+      const target = evt.target as HTMLElement;
+      if (target.closest('a, button, input, textarea, [role="button"]')) return;
+      selection.toggle(mEvent);
     };
 
     const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
@@ -1028,18 +992,20 @@ export const Message = as<'div', MessageProps>(
       <MessageBase
         className={classNames(css.MessageBase, className, {
           [css.MessageBaseBubbleCollapsed]: messageLayout === MessageLayout.Bubble && collapse,
+          [css.MessageBaseSelecting]: selection.isActive,
         })}
         tabIndex={0}
         space={messageSpacing}
         collapse={collapse}
         highlight={highlight}
-        selected={!!menuAnchor || !!emojiBoardAnchor}
+        selected={selected || !!menuAnchor || !!emojiBoardAnchor}
         {...props}
         {...hoverProps}
         {...focusWithinProps}
+        onClick={handleRowClick}
         ref={ref}
       >
-        {!edit && (hover || !!menuAnchor || !!emojiBoardAnchor) && (
+        {!edit && !selection.isActive && (hover || !!menuAnchor || !!emojiBoardAnchor) && (
           <div className={css.MessageOptionsBase}>
             <Menu className={css.MessageOptionsBar} variant="SurfaceVariant">
               <Box gap="100">
@@ -1203,10 +1169,10 @@ export const Message = as<'div', MessageProps>(
                             size="300"
                             after={<Icon size="100" src={Icons.ArrowRight} />}
                             radii="300"
-                            data-event-id={mEvent.getId()}
+                            data-event-id={eventIdForSelection}
                             onClick={() => {
                               openForwardDialog({
-                                eventToForward: mEvent,
+                                eventsToForward: [mEvent],
                                 roomId: room.roomId,
                               });
                               closeMenu();
@@ -1219,6 +1185,25 @@ export const Message = as<'div', MessageProps>(
                               truncate
                             >
                               Переслать
+                            </Text>
+                          </MenuItem>
+                          <MenuItem
+                            size="300"
+                            after={<Icon size="100" src={Icons.Check} />}
+                            radii="300"
+                            data-event-id={eventIdForSelection}
+                            onClick={() => {
+                              selection.toggle(mEvent);
+                              closeMenu();
+                            }}
+                          >
+                            <Text
+                              className={css.MessageMenuItemText}
+                              as="span"
+                              size="T300"
+                              truncate
+                            >
+                              Выбрать
                             </Text>
                           </MenuItem>
                           {canEditEvent(mx, mEvent) && onEditId && (
@@ -1300,6 +1285,18 @@ export const Message = as<'div', MessageProps>(
               </Box>
             </Menu>
           </div>
+        )}
+        {selection.isActive && isSelectable && (
+          <Box className={css.MessageSelectionCheckbox} alignItems="Center" justifyContent="Center">
+            <Checkbox
+              size="200"
+              variant="Primary"
+              checked={selected}
+              onClick={() => {
+                selection.toggle(mEvent);
+              }}
+            />
+          </Box>
         )}
         {messageLayout === MessageLayout.Compact && (
           <CompactLayout before={headerJSX} onContextMenu={handleContextMenu}>

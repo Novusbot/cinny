@@ -313,11 +313,19 @@ export const downloadEncryptedMedia = async (
   return decryptedContent;
 };
 
+/**
+ * Выполняет действия последовательно, с паузой после 429.
+ *
+ * Возвращает результат по каждому элементу. Ошибка (кроме исчерпания
+ * ретраев) НЕ пробрасывается: исторически здесь глотается всё, и от этого
+ * зависят Lobby/Invites/useCommands. Вызывающий, которому важно знать
+ * результат (ForwardDialog, удаление пачки), проверяет элементы сам.
+ */
 export const rateLimitedActions = async <T, R = void>(
   data: T[],
   callback: (item: T, index: number) => Promise<R>,
   maxRetryCount?: number
-) => {
+): Promise<(R | undefined)[]> => {
   let retryCount = 0;
 
   let actionInterval = 0;
@@ -327,12 +335,12 @@ export const rateLimitedActions = async <T, R = void>(
       setTimeout(resolve, ms);
     });
 
-  const performAction = async (dataItem: T, index: number) => {
-    const [err] = await to<R, MatrixError>(callback(dataItem, index));
+  const performAction = async (dataItem: T, index: number): Promise<R | undefined> => {
+    const [err, res] = await to<R, MatrixError>(callback(dataItem, index));
 
     if (err?.httpStatus === 429) {
       if (retryCount === maxRetryCount) {
-        return;
+        return undefined;
       }
 
       const waitMS = err.getRetryAfterMs() ?? 3000;
@@ -340,20 +348,25 @@ export const rateLimitedActions = async <T, R = void>(
       await sleepForMs(waitMS);
       retryCount += 1;
 
-      await performAction(dataItem, index);
+      return performAction(dataItem, index);
     }
+
+    if (err) return undefined;
+    return res;
   };
 
+  const results: (R | undefined)[] = [];
   for (let i = 0; i < data.length; i += 1) {
     const dataItem = data[i];
     retryCount = 0;
     // eslint-disable-next-line no-await-in-loop
-    await performAction(dataItem, i);
+    results.push(await performAction(dataItem, i));
     if (actionInterval > 0) {
       // eslint-disable-next-line no-await-in-loop
       await sleepForMs(actionInterval);
     }
   }
+  return results;
 };
 
 export const knockSupported = (version: string): boolean => {

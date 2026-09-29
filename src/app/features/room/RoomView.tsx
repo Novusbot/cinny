@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Text, config } from 'folds';
 import { EventType } from 'matrix-js-sdk';
 import { ReactEditor } from 'slate-react';
@@ -24,6 +24,10 @@ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoom } from '../../hooks/useRoom';
 import { useActiveThread, useSetActiveThread } from '../../state/hooks/activeThread';
+import { useMessageSelection } from '../../state/hooks/messageSelection';
+import { useOpenForwardDialog } from '../../state/hooks/forwardDialog';
+import { MessageSelectionBar } from './MessageSelectionBar';
+import { pluralMessages } from '../../utils/i18n';
 
 const FN_KEYS_REGEX = /^F\d+$/;
 const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
@@ -72,11 +76,73 @@ export function RoomView({ eventId }: { eventId?: string }) {
   const activeThread = useActiveThread();
   const setActiveThread = useSetActiveThread();
 
+  // Message selection state
+  const selection = useMessageSelection(roomId);
+  const { selected, isActive: isSelectionActive, clear: clearSelection, retain } = selection;
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | undefined>();
+  const openForwardDialog = useOpenForwardDialog();
+
+  const handleDeleteSelected = useCallback(
+    async (reason: string) => {
+      if (deleting) return;
+      const mEvents = [...selected];
+      if (mEvents.length === 0) return;
+      setDeleting(true);
+      setDeleteError(undefined);
+      try {
+        // allSettled, а не rateLimitedActions: тот глотает ошибки, и частично
+        // неудачное удаление выглядело бы как успешное.
+        const trimmedReason = reason.trim();
+        const results = await Promise.allSettled(
+          mEvents.map((evt) => {
+            const selectedEventId = evt.getId();
+            if (!selectedEventId) return Promise.reject(new Error('Сообщение без event ID'));
+            return mx.redactEvent(
+              roomId,
+              selectedEventId,
+              trimmedReason ? { reason: trimmedReason } : undefined
+            );
+          })
+        );
+
+        const failedIds = results
+          .map((res, index) => (res.status === 'rejected' ? mEvents[index].getId() : undefined))
+          .filter((id): id is string => Boolean(id));
+
+        // Успешно удалённые снимаются сами (событие становится redacted),
+        // неудачные оставляем выделенными, чтобы можно было повторить.
+        retain(failedIds);
+
+        if (failedIds.length > 0) {
+          setDeleteError(
+            `Не удалось удалить ${pluralMessages(failedIds.length)}. Проверьте права в комнате.`
+          );
+        }
+      } finally {
+        setDeleting(false);
+      }
+    },
+    [deleting, mx, roomId, selected, retain]
+  );
+
+  const handleForwardSelected = useCallback(() => {
+    if (selected.length === 0) return;
+    // Порядок ленты: ранние сверху, как в таймлайне.
+    const events = [...selected].sort((a, b) => a.getTs() - b.getTs());
+    openForwardDialog({ eventsToForward: events, roomId });
+    clearSelection();
+  }, [roomId, selected, openForwardDialog, clearSelection]);
+
   // Clear active thread when switching rooms
   useEffect(() => {
     setActiveThread(null);
-    return () => setActiveThread(null);
-  }, [roomId, setActiveThread]);
+    clearSelection();
+    return () => {
+      setActiveThread(null);
+      clearSelection();
+    };
+  }, [roomId, setActiveThread, clearSelection]);
 
   const tombstoneEvent = useStateEvent(room, StateEvent.RoomTombstone);
   const powerLevels = usePowerLevelsContext();
@@ -90,6 +156,8 @@ export function RoomView({ eventId }: { eventId?: string }) {
     useCallback(
       (evt) => {
         if (editableActiveElement()) return;
+        // В режиме выбора сообщений инпута нет — фокусировать редактор некуда
+        if (isSelectionActive) return;
         const portalContainer = document.getElementById('portalContainer');
         if (portalContainer && portalContainer.children.length > 0) {
           return;
@@ -98,7 +166,7 @@ export function RoomView({ eventId }: { eventId?: string }) {
           ReactEditor.focus(editor);
         }
       },
-      [editor]
+      [editor, isSelectionActive]
     )
   );
 
@@ -144,37 +212,48 @@ export function RoomView({ eventId }: { eventId?: string }) {
         )}
       </Box>
       <Box shrink="No" direction="Column">
-        <div style={{ padding: `0 ${config.space.S400}` }}>
-          {tombstoneEvent ? (
-            <RoomTombstone
-              roomId={roomId}
-              body={tombstoneEvent.getContent().body}
-              replacementRoomId={tombstoneEvent.getContent().replacement_room}
-            />
-          ) : (
-            <>
-              {canMessage && (
-                <RoomInput
-                  room={room}
-                  editor={editor}
-                  roomId={roomId}
-                  fileDropContainerRef={roomViewRef}
-                  ref={roomInputRef}
-                />
-              )}
-              {!canMessage && (
-                <RoomInputPlaceholder
-                  style={{ padding: config.space.S200 }}
-                  alignItems="Center"
-                  justifyContent="Center"
-                >
-                  <Text align="Center">You do not have permission to post in this room</Text>
-                </RoomInputPlaceholder>
-              )}
-            </>
-          )}
-        </div>
-        {hideActivity ? <RoomViewFollowingPlaceholder /> : <RoomViewFollowing room={room} />}
+        {isSelectionActive ? (
+          <MessageSelectionBar
+            room={room}
+            deleting={deleting}
+            deleteError={deleteError}
+            onDelete={handleDeleteSelected}
+            onForward={handleForwardSelected}
+          />
+        ) : (
+          <div style={{ padding: `0 ${config.space.S400}` }}>
+            {tombstoneEvent ? (
+              <RoomTombstone
+                roomId={roomId}
+                body={tombstoneEvent.getContent().body}
+                replacementRoomId={tombstoneEvent.getContent().replacement_room}
+              />
+            ) : (
+              <>
+                {canMessage && (
+                  <RoomInput
+                    room={room}
+                    editor={editor}
+                    roomId={roomId}
+                    fileDropContainerRef={roomViewRef}
+                    ref={roomInputRef}
+                  />
+                )}
+                {!canMessage && (
+                  <RoomInputPlaceholder
+                    style={{ padding: config.space.S200 }}
+                    alignItems="Center"
+                    justifyContent="Center"
+                  >
+                    <Text align="Center">You do not have permission to post in this room</Text>
+                  </RoomInputPlaceholder>
+                )}
+              </>
+            )}
+          </div>
+        )}
+        {!isSelectionActive &&
+          (hideActivity ? <RoomViewFollowingPlaceholder /> : <RoomViewFollowing room={room} />)}
       </Box>
     </Page>
   );

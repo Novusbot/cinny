@@ -24,6 +24,7 @@ import { useActiveThread, useSetActiveThread } from '../../state/hooks/activeThr
 import { hasOpenDialogsAtom } from '../../state/navigationStack';
 import { useCallEmbed } from '../../hooks/useCallEmbed';
 import { useCallMembers, useCallSession } from '../../hooks/useCall';
+import { useMessageSelection } from '../../state/hooks/messageSelection';
 
 export function Room() {
   const { eventId } = useParams();
@@ -52,9 +53,22 @@ export function Room() {
   const activeThreadRef = useRef(activeThread);
   activeThreadRef.current = activeThread;
 
+  // Message selection state (priority 2 for Escape / swipe)
+  const selection = useMessageSelection(room.roomId);
+  const selectionActiveRef = useRef(selection.isActive);
+  selectionActiveRef.current = selection.isActive;
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
+
   // macOS native navigation: swipe + Escape to go home (or close thread)
   useMacNavigation(
     useCallback(() => {
+      // If message selection is active, clear it and prevent navigation
+      if (selectionActiveRef.current) {
+        selectionRef.current.clear();
+        return true; // Consume the swipe
+      }
+
       // If thread is open, close it and prevent navigation
       if (activeThreadRef.current !== null) {
         setActiveThread(null);
@@ -76,12 +90,18 @@ export function Room() {
             return; // Consume the ESC - don't proceed to thread/room navigation
           }
 
-          // Priority 2: If thread is open, close it
+          // Priority 2: If message selection is active, clear it
+          if (selectionActiveRef.current) {
+            selectionRef.current.clear();
+            return;
+          }
+
+          // Priority 3: If thread is open, close it
           if (activeThreadRef.current !== null) {
             setActiveThread(null);
             return;
           }
-          // Priority 3: Otherwise, navigate home
+          // Priority 4: Otherwise, navigate home
           markAsRead(mx, room.roomId, hideActivity);
           navigate(getHomePath(), { replace: false });
         }

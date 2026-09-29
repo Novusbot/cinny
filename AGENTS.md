@@ -57,6 +57,7 @@ ln -s ../cinny cinny
 - **Insert Link Dialog** — Cmd+K / Ctrl+K для вставки Markdown-ссылок (`[text](url)`)
 - **Отправка файлов в треды** — фикс привязки `m.relates_to` для файлов
 - **Local Echo в тредах** — мгновенное отображение сообщений через `threadId` в `sendMessage()`
+- **Режим выбора сообщений** — «Выбрать» в меню, чекбоксы, панель удаления/пересылки пачки (лента + треды)
 
 ### Багфиксы
 - Сохранение тредов при удалении корневого сообщения (redacted thread root)
@@ -254,6 +255,7 @@ Upstream десктопа всегда `main`.
 - `src/app/state/navigationStack.ts`
 - `src/app/state/hooks/activeThread.ts`
 - `src/app/hooks/useDialogStack.ts`
+- `src/app/features/room/MessageSelectionBar.tsx` (панель выбора: ESC-свайп приоритет 2)
 
 ### Telegram UI
 - `src/app/features/room-nav/RoomNavItem.tsx`
@@ -264,11 +266,17 @@ Upstream десктопа всегда `main`.
 
 ### Фичи
 - `src/app/features/forward-dialog/` (вся папка)
+- `src/app/features/forward-dialog/ForwardDialog.css.ts` (стили диалога на vanilla-extract)
 - `src/app/features/insert-link-dialog/` (вся папка)
 - `src/app/state/forwardDialog.ts`
 - `src/app/state/insertLinkDialog.ts`
 - `src/app/state/hooks/forwardDialog.ts`
 - `src/app/state/hooks/insertLinkDialog.ts`
+- `src/app/features/room/message/MessageDeletePrompt.tsx`
+- `src/app/state/messageSelection.ts`
+- `src/app/state/hooks/messageSelection.ts`
+- `src/app/utils/i18n.ts`
+- `src/app/utils/matrix.ts` (`rateLimitedActions` — глотает ошибки, возвращает результат по каждому элементу; ретраи 429 ограничены через `maxRetryCount`)
 
 ### Поиск и коммуникации
 - `src/app/features/search/Search.tsx` (переназначен hotkey с Cmd+K на Cmd+F)
@@ -300,6 +308,7 @@ Upstream десктопа всегда `main`.
   - [ ] Forward сообщений
   - [ ] Вставка ссылок (Cmd+K)
   - [ ] Отображение превью в сайдбаре
+  - [ ] Режим выбора сообщений (ПКМ «Выбрать», панель, удаление/пересылка пачки) в ленте и в треде
 
 ---
 
