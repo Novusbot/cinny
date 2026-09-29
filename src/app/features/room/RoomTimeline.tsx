@@ -47,7 +47,7 @@ import {
 import { isKeyHotkey } from 'is-hotkey';
 import { Opts as LinkifyOpts } from 'linkifyjs';
 import { useTranslation } from 'react-i18next';
-import { eventWithShortcode, factoryEventSentBy, getMxIdLocalPart } from '../../utils/matrix';
+import { getMxIdLocalPart } from '../../utils/matrix';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useVirtualPaginator, ItemRange } from '../../hooks/useVirtualPaginator';
 import { useAlive } from '../../hooks/useAlive';
@@ -79,13 +79,13 @@ import {
   getEventReactions,
   getLatestEditableEvt,
   getMemberDisplayName,
-  getReactionContent,
   isMembershipChanged,
   reactionOrEditEvent,
 } from '../../utils/room';
 import { useSetting } from '../../state/hooks/settings';
 import { MessageLayout, settingsAtom } from '../../state/settings';
 import { useMatrixEventRenderer } from '../../hooks/useMatrixEventRenderer';
+import { useRoomReactionToggle } from '../../hooks/useRoomReactionToggle';
 import { Reactions, Message, Event, EncryptedContent } from './message';
 import { useMemberEventParser } from '../../hooks/useMemberEventParser';
 import * as customHtmlCss from '../../styles/CustomHtml.css';
@@ -988,29 +988,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     [room, setReplyDraft, editor]
   );
 
-  const handleReactionToggle = useCallback(
-    (targetEventId: string, key: string, shortcode?: string) => {
-      const relations = getEventReactions(room.getUnfilteredTimelineSet(), targetEventId);
-      const allReactions = relations?.getSortedAnnotationsByKey() ?? [];
-      const [, reactionsSet] = allReactions.find(([k]) => k === key) ?? [];
-      const reactions = reactionsSet ? Array.from(reactionsSet) : [];
-      const myReaction = reactions.find(factoryEventSentBy(mx.getUserId()!));
+  const handleReactionToggle = useRoomReactionToggle(room);
 
-      if (myReaction && !!myReaction?.isRelation()) {
-        mx.redactEvent(room.roomId, myReaction.getId()!);
-        return;
-      }
-      const rShortcode =
-        shortcode ||
-        (reactions.find(eventWithShortcode)?.getContent().shortcode as string | undefined);
-      mx.sendEvent(
-        room.roomId,
-        MessageEvent.Reaction as any,
-        getReactionContent(targetEventId, key, rShortcode)
-      );
-    },
-    [mx, room]
-  );
   const handleEdit = useCallback(
     (editEvtId?: string) => {
       if (editEvtId) {
