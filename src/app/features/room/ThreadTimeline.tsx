@@ -286,7 +286,7 @@ export function ThreadTimeline({ room, rootEventId }: ThreadTimelineProps) {
 
   const timelineSet = room.getUnfilteredTimelineSet();
 
-  const renderMessage = (mEvent: MatrixEvent, idx: number) => {
+  const renderMessage = (mEvent: MatrixEvent, idx: number, isThreadRoot = false) => {
     const mEventId = mEvent.getId();
     if (!mEventId) return null;
 
@@ -319,7 +319,7 @@ export function ThreadTimeline({ room, rootEventId }: ThreadTimelineProps) {
         canSendReaction={canSendReaction}
         canPinEvent={canPinEvent}
         imagePackRooms={imagePackRooms}
-        relations={hasReactions ? reactionRelations : undefined}
+        relations={!isThreadRoot && hasReactions ? reactionRelations : undefined}
         onUserClick={() => {}}
         onUsernameClick={() => {}}
         onReplyClick={() => {}}
@@ -340,7 +340,7 @@ export function ThreadTimeline({ room, rootEventId }: ThreadTimelineProps) {
           ) : undefined
         }
         reactions={
-          reactionRelations ? (
+          !isThreadRoot && reactionRelations ? (
             <Reactions
               style={{ marginTop: config.space.S200 }}
               room={room}
@@ -395,7 +395,7 @@ export function ThreadTimeline({ room, rootEventId }: ThreadTimelineProps) {
         gap="100"
       >
         {/* 1. Thread root (original message) */}
-        {rootEvent && renderMessage(rootEvent, 0)}
+        {rootEvent && renderMessage(rootEvent, 0, true)}
 
         {/* 2. Thread replies (with visual line and indentation) */}
         {threadReplies.length > 0 && (
