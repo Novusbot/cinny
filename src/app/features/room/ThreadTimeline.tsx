@@ -10,6 +10,7 @@ import { MessageLayout, MessageSpacing } from '../../state/settings';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
+import { useRoomReactionToggle } from '../../hooks/useRoomReactionToggle';
 import { useIsDirectRoom } from '../../hooks/useRoom';
 import { getMemberDisplayName } from '../../utils/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
@@ -84,7 +85,10 @@ export function ThreadTimeline({ room, rootEventId }: ThreadTimelineProps) {
   const canRedact = permissions.action('redact', mx.getSafeUserId());
   const canDeleteOwn = permissions.event(EventType.RoomRedaction, mx.getSafeUserId());
   const canSendReaction = permissions.event(EventType.Reaction, mx.getSafeUserId());
+
   const canPinEvent = permissions.stateEvent(EventType.RoomPinnedEvents, mx.getSafeUserId());
+
+  const handleReactionToggle = useRoomReactionToggle(room);
 
   const creatorsTag = useRoomCreatorsTag();
   const powerLevelTags = usePowerLevelTags(room, powerLevels);
@@ -298,7 +302,7 @@ export function ThreadTimeline({ room, rootEventId }: ThreadTimelineProps) {
         onUserClick={() => {}}
         onUsernameClick={() => {}}
         onReplyClick={() => {}}
-        onReactionToggle={() => {}}
+        onReactionToggle={handleReactionToggle}
         onEditId={() => {}}
         reply={
           replyEventId ? (
@@ -322,7 +326,7 @@ export function ThreadTimeline({ room, rootEventId }: ThreadTimelineProps) {
               relations={reactionRelations}
               mEventId={mEventId}
               canSendReaction={canSendReaction}
-              onReactionToggle={() => {}}
+              onReactionToggle={handleReactionToggle}
             />
           ) : undefined
         }
