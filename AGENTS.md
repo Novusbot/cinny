@@ -175,8 +175,11 @@ git -C cinny-desktop commit -m "chore: запинить submodule на теку�
 git -C cinny-desktop push origin dev
 ```
 
-После пуша в `dev` десктопного репозитория CI сам собирает Windows — дождаться (≈11 минут)
-и скачать артефакт `cinny-windows` в разделе Actions.
+Пуш в `dev` **не запускает** сборку — в воркфлоу только `workflow_dispatch`. Код можно коммитить
+и пушить сколько угодно раз, сборка запускается только по требованию.
+
+Когда нужна сборка для коллег: Actions → **Windows build** → зелёная кнопка **Run workflow** →
+дождаться (≈11 минут) → скачать артефакт `cinny-windows`.
 Если при этом менялись `.github/workflows/*`, не забыть `git -C cinny-desktop push origin dev:main` —
 дефолтная ветка форка `main`, и GitHub показывает кнопку Run workflow только для воркфлоу из неё.
 
@@ -351,7 +354,7 @@ Upstream десктопа всегда `main`.
 
 ### Сборка и десктоп (cinny-desktop)
 - `cinny-desktop/.gitmodules` (submodule `cinny` → `https://github.com/Novusbot/cinny.git`) — **наш**, не удалять
-- `cinny-desktop/.github/workflows/tauri.yml` (**Windows build**) — **наш**, не перезаписывать upstream. Собирает ТОЛЬКО Windows-установщик; запускается автоматически на каждом пуше в `dev` плюс вручную через `workflow_dispatch`. Артефакт `cinny-windows` (MSI + NSIS `.exe`), `retention-days: 30`. macOS/Linux job'ов нет — собираем на маке локально. Из конфига удалены: updater `pubkey`/`endpoints`, `createUpdaterArtifacts`, пакет `@tauri-apps/plugin-updater`, зависимости `@actions/github` и `node-fetch`, скрипт `scripts/release.mjs`
+- `cinny-desktop/.github/workflows/tauri.yml` (**Windows build**) — **наш**, не перезаписывать upstream. Собирает ТОЛЬКО Windows-установщик. Триггер — **исключительно `workflow_dispatch`**, никакого `push`: кодить и пушить можно свободно, сборка запускается только кнопкой Run workflow вручную (раз в месяц для коллег). Артефакт `cinny-windows` (MSI + NSIS `.exe`), `retention-days: 30`. macOS/Linux job'ов нет — собираем на маке локально. Из конфига удалены: updater `pubkey`/`endpoints`, `createUpdaterArtifacts`, пакет `@tauri-apps/plugin-updater`, зависимости `@actions/github` и `node-fetch`, скрипт `scripts/release.mjs`
 
 ---
 
@@ -364,7 +367,7 @@ Upstream десктопа всегда `main`.
 - [ ] Тег `vX.Y.Z-tg.N` запушен в `Novusbot/cinny`
 - [ ] Зафиксировать submodule на текущую работу (ежемесячный цикл, без тега): `git -C cinny-desktop/cinny fetch origin && git -C cinny-desktop/cinny checkout origin/dev`, затем `git -C cinny-desktop add cinny && git -C cinny-desktop commit && git -C cinny-desktop push origin dev` — иначе коллеги получат сборку со старым фронтом
 - [ ] Actions включены в обоих форках (`cinny` и `cinny-desktop`): Settings → Actions → General → Enable Actions
-- [ ] Пуш в `dev` дал коллег Windows-сборку: `Novusbot/cinny-desktop` → Actions → **Windows build** → скачать артефакт `cinny-windows` (MSI + NSIS `.exe`, хранится 30 дней)
+- [ ] Windows-сборка собрана по кнопке: Actions → **Windows build** → **Run workflow** → дождаться (≈11 минут) → скачать артефакт `cinny-windows` (MSI + NSIS `.exe`, хранится 30 дней) и разослать коллегам
 - [ ] Собрать десктоп локально на маке для проверки: `cd cinny-desktop && npm run tauri build`
 - [ ] Протестировать:
   - [ ] Навигация (ESC, свайпы, модалки)
