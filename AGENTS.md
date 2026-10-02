@@ -26,13 +26,25 @@
 
 ### Связь между репозиториями
 
-`cinny-desktop/cinny` — это **symlink** на `../cinny`:
+`cinny-desktop/cinny` — это **git submodule**, указывающий на наш форк веба:
+
+| Поле | Значение |
+|---|---|
+| Путь | `cinny-desktop/cinny` |
+| URL | `https://github.com/Novusbot/cinny.git` |
+| Ветка | `dev` |
+| Состояние | запинен на тег форка (например `v4.12.7-tg.1`) |
+
+Раньше здесь был symlink на `../cinny`, но Actions-раннер не может разрешить symlink,
+поэтому коллеги на Windows не могли собрать десктоп через CI. Сейчас это полноценный submodule,
+и git-ссылка на конкретный коммит коммитится в `cinny-desktop`.
+
+Обновить submodule до свежего состояния:
 ```bash
 cd /Users/spikalov/Проекты/Matrix/cinny-desktop
-ln -s ../cinny cinny
+git submodule sync
+git submodule update --init --recursive
 ```
-
-**Критически важно:** это НЕ git submodule. В `cinny-desktop` папка `cinny` добавлена в `.gitignore`.
 
 ---
 
@@ -107,9 +119,14 @@ npm run tauri dev       # dev режим (запускает cinny + Tauri)
 1. Обновить `cinny` от upstream
 2. Обновить `cinny-desktop` от upstream
 3. Разрешить конфликты (см. раздел 7)
-4. Синхронизировать версии (раздел 5)
-5. Собрать и протестировать
-6. Запушить оба репозитория
+4. **Зафиксировать submodule на свежем теге форка** (см. ниже)
+5. Синхронизировать версии (раздел 5)
+6. Собрать и протестировать
+7. Запушить оба репозитория
+
+**Почему важен шаг 4:** в `cinny-desktop` коммитится git-ссылка на конкретный коммит submodule.
+Без запиненного коммита CI соберёт произвольную ревизию веба, и результат сборки будет
+непредсказуемым (или вообще не соберётся, если тег ещё не запушен).
 
 ### cinny (веб)
 ```bash
@@ -128,6 +145,19 @@ git merge upstream/main   # upstream-desktop всегда main
 # разрешить конфликты
 git push origin dev
 ```
+
+### Фиксация submodule на теге форка
+
+```bash
+cd /Users/spikalov/Проекты/Matrix
+git -C cinny-desktop/cinny fetch --tags
+git -C cinny-desktop/cinny checkout vX.Y.Z-tg.N
+git -C cinny-desktop add cinny
+git -C cinny-desktop commit -m "chore: запинить submodule на vX.Y.Z-tg.N"
+```
+
+Тег `vX.Y.Z-tg.N` должен существовать в `Novusbot/cinny` — CI форка тянет submodule по этой ссылке.
+Суффикс `-tg.N` обязателен: upstream использует теги `vX.Y.Z` без суффикса (раздел 12).
 
 ---
 
@@ -200,21 +230,30 @@ cargo update
 - Добавить call-импорты из upstream: `useCallEmbed`, `useCallStart`, `useLivekitSupport`, `webRTCSupported`
 - Сохранить логику отображения треда в шапке ("Тред: {name}", кнопка назад)
 
-### 7.3 Критическое правило: cinny symlink
+### 7.3 cinny как submodule (не symlink)
 
-**НИКОГДА** не допускать коммита папки `cinny` внутрь `cinny-desktop`.
+**Правило:** `cinny-desktop/cinny` — это **git submodule**, а не symlink.
 
-Если git ругается на submodule:
+Symlink больше не используется: Actions-раннер не может разрешить symlink,
+поэтому CI-сборка десктопа (в том числе на Windows) не работала. Папка `cinny`
+должна оставаться submodule — это позволяет CI зафиксировать конкретную ревизию веба.
+
+**НИКОГДА** не удалять `.gitmodules`, не заменять submodule на symlink и не добавлять `cinny` в `.gitignore`.
+
+Если submodule «сломался» (пустая папка, symlink или рассинхрон с `.gitmodules`),
+восстанавливать **только** через submodule-команды:
 ```bash
 cd /Users/spikalov/Проекты/Matrix/cinny-desktop
-git submodule deinit -f cinny 2>/dev/null || true
+git submodule sync
+git submodule update --init --recursive
+```
+
+Если это не помогло — полная переинициализация (раздел 11):
+```bash
+git submodule deinit -f cinny
 rm -rf .git/modules/cinny
-rm -f .gitmodules
-git rm --cached cinny 2>/dev/null || true
-rm -rf cinny
-ln -s ../cinny cinny
-echo "/cinny" >> .gitignore
-git add .gitignore
+rm cinny
+git submodule update --init --recursive
 ```
 
 ---
@@ -289,16 +328,21 @@ Upstream десктопа всегда `main`.
 ### Конфигурация
 - `config.json` (homeservers, featured communities) — **наш**, не перезаписывать upstream
 
+### Сборка и десктоп (cinny-desktop)
+- `cinny-desktop/.gitmodules` (submodule `cinny` → `https://github.com/Novusbot/cinny.git`) — **наш**, не удалять
+- `cinny-desktop/.github/workflows/tauri.yml` (сборка десктопа через `workflow_dispatch`) — **наш**, не перезаписывать upstream. Из конфига удалены: updater `pubkey`/`endpoints`, `createUpdaterArtifacts`, пакет `@tauri-apps/plugin-updater`, зависимости `@actions/github` и `node-fetch`, скрипт `scripts/release.mjs`
+
 ---
 
 ## 10. Чеклист перед релизом
 
 - [ ] Обновить `cinny` от upstream, разрешить конфликты, запушить `dev`
 - [ ] Обновить `cinny-desktop` от upstream, разрешить конфликты, запушить `dev`
-- [ ] Синхронизировать версию в 3 местах (package.json, Cargo.toml, tauri.conf.json)
-- [ ] Убедиться что symlink `cinny-desktop/cinny` жив (`ls -la cinny-desktop/cinny`)
-- [ ] Проверить отсутствие `.gitmodules` в `cinny-desktop`
-- [ ] `cargo update` в `cinny-desktop/src-tauri/`
+- [ ] Синхронизировать версию в 3 местах: `cinny/package.json`, `cinny-desktop/src-tauri/Cargo.toml`, `cinny-desktop/src-tauri/tauri.conf.json` (актуальная версия релиза — 4.12.7)
+- [ ] Submodule `cinny-desktop/cinny` запинен на свежий тег форка `vX.Y.Z-tg.N` (`git -C cinny-desktop/cinny log -1`)
+- [ ] Тег `vX.Y.Z-tg.N` запушен в `Novusbot/cinny`
+- [ ] Actions включены в обоих форках (`cinny` и `cinny-desktop`): Settings → Actions → General → Enable Actions
+- [ ] Сборка Windows проверена через `workflow_dispatch` в `cinny-desktop/.github/workflows/tauri.yml`
 - [ ] Собрать веб: `cd cinny && npm run build`
 - [ ] Собрать десктоп: `cd cinny-desktop && npm run tauri build`
 - [ ] Протестировать:
@@ -314,9 +358,22 @@ Upstream десктопа всегда `main`.
 
 ## 11. Частые ошибки и решения
 
-### "error: expected submodule path 'cinny' not to be a symbolic link"
-**Причина:** git ожидает submodule, а нашёл symlink.
-**Решение:** Раздел 7.3 — удалить submodule-tracking, восстановить symlink, добавить в `.gitignore`.
+### В `cinny-desktop/cinny` лежит symlink или пустая папка вместо submodule
+**Причина:** остатки старой схемы с symlink или непроинициализированный submodule.
+**Решение:** полностью переинициализировать submodule:
+```bash
+cd /Users/spikalov/Проекты/Matrix/cinny-desktop
+git submodule deinit -f cinny
+rm -rf .git/modules/cinny
+rm cinny
+git submodule update --init --recursive
+```
+Если submodule не сломан, достаточно `git submodule sync && git submodule update --init --recursive` (раздел 7.3).
+
+### Workflow не запускается в форке
+**Причина:** в форках Actions выключены по умолчанию (forks have Actions disabled by default),
+поэтому workflow из `dev` не запустятся, пока их явно не включить.
+**Решение:** Settings → Actions → General → Enable Actions в `Novusbot/cinny` и `Novusbot/cinny-desktop`.
 
 ### "failed to run custom build command for `app-lib`"
 **Причина:** `Cargo.lock` рассинхронизирован с `Cargo.toml`.
@@ -338,3 +395,4 @@ Upstream десктопа всегда `main`.
 - **Upstream десктоп:** https://github.com/cinnyapp/cinny-desktop
 - **Fork веб:** https://github.com/Novusbot/cinny
 - **Fork десктоп:** https://github.com/Novusbot/cinny-desktop
+- **Теги релизов форка веба:** суффикс `-tg.N` (например `v4.12.7-tg.1`), т.к. upstream использует теги `vX.Y.Z` без суффикса
