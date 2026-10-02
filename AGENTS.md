@@ -159,6 +159,27 @@ git -C cinny-desktop commit -m "chore: запинить submodule на vX.Y.Z-tg
 Тег `vX.Y.Z-tg.N` должен существовать в `Novusbot/cinny` — CI форка тянет submodule по этой ссылке.
 Суффикс `-tg.N` обязателен: upstream использует теги `vX.Y.Z` без суффикса (раздел 12).
 
+### Фиксация submodule на текущую работу (ежемесячный цикл)
+
+Десктоп собирает **ровно тот коммит веба, который зафиксирован в submodule** — не последний в `dev`.
+Без новой фиксации после пуша веба коллеги получат Windows-сборку со старым фронтом.
+
+Это рутинная операция: тег для неё **не нужен**, теги — только для релизной фиксации (раздел 5).
+
+```bash
+cd /Users/spikalov/Проекты/Matrix
+git -C cinny-desktop/cinny fetch origin
+git -C cinny-desktop/cinny checkout origin/dev
+git -C cinny-desktop add cinny
+git -C cinny-desktop commit -m "chore: запинить submodule на текущий dev"
+git -C cinny-desktop push origin dev
+```
+
+После пуша в `dev` десктопного репозитория CI сам собирает Windows — дождаться (≈11 минут)
+и скачать артефакт `cinny-windows` в разделе Actions.
+Если при этом менялись `.github/workflows/*`, не забыть `git -C cinny-desktop push origin dev:main` —
+дефолтная ветка форка `main`, и GitHub показывает кнопку Run workflow только для воркфлоу из неё.
+
 ---
 
 ## 7. Разрешение типичных конфликтов
@@ -341,6 +362,7 @@ Upstream десктопа всегда `main`.
 - [ ] Синхронизировать версию в 3 местах: `cinny/package.json`, `cinny-desktop/src-tauri/Cargo.toml`, `cinny-desktop/src-tauri/tauri.conf.json` (актуальная версия релиза — 4.12.7)
 - [ ] Submodule `cinny-desktop/cinny` запинен на свежий тег форка `vX.Y.Z-tg.N` (`git -C cinny-desktop/cinny log -1`)
 - [ ] Тег `vX.Y.Z-tg.N` запушен в `Novusbot/cinny`
+- [ ] Зафиксировать submodule на текущую работу (ежемесячный цикл, без тега): `git -C cinny-desktop/cinny fetch origin && git -C cinny-desktop/cinny checkout origin/dev`, затем `git -C cinny-desktop add cinny && git -C cinny-desktop commit && git -C cinny-desktop push origin dev` — иначе коллеги получат сборку со старым фронтом
 - [ ] Actions включены в обоих форках (`cinny` и `cinny-desktop`): Settings → Actions → General → Enable Actions
 - [ ] Пуш в `dev` дал коллег Windows-сборку: `Novusbot/cinny-desktop` → Actions → **Windows build** → скачать артефакт `cinny-windows` (MSI + NSIS `.exe`, хранится 30 дней)
 - [ ] Собрать десктоп локально на маке для проверки: `cd cinny-desktop && npm run tauri build`
