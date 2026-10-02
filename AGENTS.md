@@ -330,7 +330,7 @@ Upstream десктопа всегда `main`.
 
 ### Сборка и десктоп (cinny-desktop)
 - `cinny-desktop/.gitmodules` (submodule `cinny` → `https://github.com/Novusbot/cinny.git`) — **наш**, не удалять
-- `cinny-desktop/.github/workflows/tauri.yml` (сборка десктопа через `workflow_dispatch`) — **наш**, не перезаписывать upstream. Из конфига удалены: updater `pubkey`/`endpoints`, `createUpdaterArtifacts`, пакет `@tauri-apps/plugin-updater`, зависимости `@actions/github` и `node-fetch`, скрипт `scripts/release.mjs`
+- `cinny-desktop/.github/workflows/tauri.yml` (**Windows build**) — **наш**, не перезаписывать upstream. Собирает ТОЛЬКО Windows-установщик; запускается автоматически на каждом пуше в `dev` плюс вручную через `workflow_dispatch`. Артефакт `cinny-windows` (MSI + NSIS `.exe`), `retention-days: 30`. macOS/Linux job'ов нет — собираем на маке локально. Из конфига удалены: updater `pubkey`/`endpoints`, `createUpdaterArtifacts`, пакет `@tauri-apps/plugin-updater`, зависимости `@actions/github` и `node-fetch`, скрипт `scripts/release.mjs`
 
 ---
 
@@ -342,9 +342,8 @@ Upstream десктопа всегда `main`.
 - [ ] Submodule `cinny-desktop/cinny` запинен на свежий тег форка `vX.Y.Z-tg.N` (`git -C cinny-desktop/cinny log -1`)
 - [ ] Тег `vX.Y.Z-tg.N` запушен в `Novusbot/cinny`
 - [ ] Actions включены в обоих форках (`cinny` и `cinny-desktop`): Settings → Actions → General → Enable Actions
-- [ ] Сборка Windows проверена через `workflow_dispatch` в `cinny-desktop/.github/workflows/tauri.yml`
-- [ ] Собрать веб: `cd cinny && npm run build`
-- [ ] Собрать десктоп: `cd cinny-desktop && npm run tauri build`
+- [ ] Пуш в `dev` дал коллег Windows-сборку: `Novusbot/cinny-desktop` → Actions → **Windows build** → скачать артефакт `cinny-windows` (MSI + NSIS `.exe`, хранится 30 дней)
+- [ ] Собрать десктоп локально на маке для проверки: `cd cinny-desktop && npm run tauri build`
 - [ ] Протестировать:
   - [ ] Навигация (ESC, свайпы, модалки)
   - [ ] Треды (открытие, отправка, файлы)
