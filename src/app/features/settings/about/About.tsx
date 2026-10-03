@@ -4,7 +4,7 @@ import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
-import CinnySVG from '../../../../../public/res/svg/cinny.svg';
+import CinnyLogo from '../../../../../public/res/png/cinnyt-logo.png';
 import { clearCacheAndReload } from '../../../../client/initMatrix';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 
@@ -38,8 +38,8 @@ export function About({ requestClose }: AboutProps) {
                 <Box shrink="No">
                   <img
                     style={{ width: toRem(60), height: toRem(60) }}
-                    src={CinnySVG}
-                    alt="Cinny logo"
+                    src={CinnyLogo}
+                    alt="CinnyT logo"
                   />
                 </Box>
                 <Box direction="Column" gap="300">

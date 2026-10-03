@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Button, Icon, Icons, Text, config, toRem } from 'folds';
 import { Page, PageHero, PageHeroSection } from '../../components/page';
-import CinnySVG from '../../../../public/res/svg/cinny.svg';
+import CinnyLogo from '../../../../public/res/png/cinnyt-logo.png';
 
 export function WelcomePage() {
   return (
@@ -14,7 +14,7 @@ export function WelcomePage() {
       >
         <PageHeroSection>
           <PageHero
-            icon={<img width="70" height="70" src={CinnySVG} alt="Cinny Logo" />}
+            icon={<img width="70" height="70" src={CinnyLogo} alt="CinnyT Logo" />}
             title="Welcome to CinnyT"
             subTitle={
               <span>
