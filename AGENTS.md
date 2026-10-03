@@ -1,14 +1,14 @@
-# AGENTS.md — Cinny Telegram Edition
+# AGENTS.md — CinnyT
 
-> Документ для AI-агентов и разработчиков, работающих с форком Cinny (Telegram Edition).
+> Документ для AI-агентов и разработчиков, работающих с форком CinnyT (бывш. Cinny Telegram Edition).
 > Содержит архитектуру, правила мержа, сборки и специфику кастомных модификаций.
 
 ---
 
 ## 1. Обзор проекта
 
-Это **форк** клиента [Cinny](https://github.com/cinnyapp/cinny) (Matrix-клиент на React).
-В форк внесены UI/UX модификации под паттерны Telegram — так называемая **Cinny Telegram Edition**.
+Это **форк** клиента [Cinny](https://github.com/cinnyapp/cinny) (Matrix-клиент на React) под именем **CinnyT**.
+В форк внесены UI/UX модификации под паттерны Telegram. Автор форка: Sergey Pikalov (Telegram @sfpikalov).
 
 Полный список изменений documented в:
 - `/Users/spikalov/Проекты/Matrix/cinny/CINNY_TG_MOD_CHANGELOG.md`
@@ -48,7 +48,7 @@ git submodule update --init --recursive
 
 ---
 
-## 3. Кастомные модификации (Telegram Edition)
+## 3. Кастомные модификации (CinnyT)
 
 Ключевые изменения, которые **нельзя потерть** при мерже:
 
