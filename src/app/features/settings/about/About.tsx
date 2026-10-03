@@ -49,6 +49,13 @@ export function About({ requestClose }: AboutProps) {
                       <Text size="T200">v4.12.7</Text>
                     </Box>
                     <Text>Yet another matrix client.</Text>
+                    <Text size="T300">
+                      Fork of <a href="https://cinny.in" target="_blank" rel="noreferrer noopener">Cinny</a> by
+                      Sergey Pikalov, Telegram{' '}
+                      <a href="https://t.me/sfpikalov" target="_blank" rel="noreferrer noopener">
+                        @sfpikalov
+                      </a>
+                    </Text>
                   </Box>
 
                   <Box gap="200" wrap="Wrap">
@@ -82,6 +89,25 @@ export function About({ requestClose }: AboutProps) {
                 </Box>
               </Box>
               <Box direction="Column" gap="100">
+                <Text size="L400">Что нового в CinnyT</Text>
+                <SequenceCard
+                  className={SequenceCardStyle}
+                  variant="SurfaceVariant"
+                  direction="Column"
+                  gap="400"
+                >
+                  <Box as="ul" direction="Column" gap="200" style={{ margin: 0, paddingLeft: config.space.S400 }}>
+                    <li><Text size="T300">Треды: ответы скрыты из ленты, кнопка «N replies»</Text></li>
+                    <li><Text size="T300">Пересылка сообщений в другие чаты</Text></li>
+                    <li><Text size="T300">Вставка ссылок по Cmd+K</Text></li>
+                    <li><Text size="T300">Превью сообщений в стиле Telegram</Text></li>
+                    <li><Text size="T300">Мультивыбор сообщений: удаление и пересылка пачкой</Text></li>
+                    <li><Text size="T300">Навигация свайпами и ESC (модалки → треды → комната)</Text></li>
+                    <li><Text size="T300">Единая лента: лички и группы вместе</Text></li>
+                  </Box>
+                </SequenceCard>
+              </Box>
+              <Box direction="Column" gap="100">
                 <Text size="L400">Options</Text>
                 <SequenceCard
                   className={SequenceCardStyle}
@@ -102,6 +128,25 @@ export function About({ requestClose }: AboutProps) {
                         outlined
                       >
                         <Text size="B300">Clear Cache</Text>
+                      </Button>
+                    }
+                  />
+                  <SettingTile
+                    title="Веб-версия"
+                    description="Доступна, пока запущено десктоп-приложение."
+                    after={
+                      <Button
+                        as="a"
+                        href="http://localhost:44548"
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        variant="Secondary"
+                        fill="Soft"
+                        size="300"
+                        radii="300"
+                        outlined
+                      >
+                        <Text size="B300">Открыть</Text>
                       </Button>
                     }
                   />
