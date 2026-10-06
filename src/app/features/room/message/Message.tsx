@@ -718,9 +718,10 @@ export const Message = as<'div', MessageProps>(
     const openForwardDialog = useOpenForwardDialog();
     const setActiveThread = useSetActiveThread();
     const selection = useMessageSelection(room.roomId);
-    // Выбирать можно только то, что разрешено удалить: иначе корзина в панели
-    // дала бы 403 на чужих сообщениях без видимой причины.
-    const isSelectable = Boolean(canDelete) && !edit && !mEvent.isRedacted();
+    // Выбрать можно любое неудалённое сообщение: переслать можно и чужое.
+    // Удаление чужих отдельно прячется в панели (корзинка только когда всё
+    // выбранное удаляемо), поэтому гейтить сам выбор по canDelete нельзя.
+    const isSelectable = !edit && !mEvent.isRedacted();
     const mEventIdOrUndefined = mEvent.getId();
     const eventIdForSelection = mEventIdOrUndefined ?? undefined;
     const selected = isSelectable && selection.isSelected(eventIdForSelection);
@@ -1187,25 +1188,27 @@ export const Message = as<'div', MessageProps>(
                               Переслать
                             </Text>
                           </MenuItem>
-                          <MenuItem
-                            size="300"
-                            after={<Icon size="100" src={Icons.Check} />}
-                            radii="300"
-                            data-event-id={eventIdForSelection}
-                            onClick={() => {
-                              selection.toggle(mEvent);
-                              closeMenu();
-                            }}
-                          >
-                            <Text
-                              className={css.MessageMenuItemText}
-                              as="span"
-                              size="T300"
-                              truncate
+                          {isSelectable && (
+                            <MenuItem
+                              size="300"
+                              after={<Icon size="100" src={Icons.Check} />}
+                              radii="300"
+                              data-event-id={eventIdForSelection}
+                              onClick={() => {
+                                selection.toggle(mEvent);
+                                closeMenu();
+                              }}
                             >
-                              Выбрать
-                            </Text>
-                          </MenuItem>
+                              <Text
+                                className={css.MessageMenuItemText}
+                                as="span"
+                                size="T300"
+                                truncate
+                              >
+                                Выбрать
+                              </Text>
+                            </MenuItem>
+                          )}
                           {canEditEvent(mx, mEvent) && onEditId && (
                             <MenuItem
                               size="300"

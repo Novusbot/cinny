@@ -151,6 +151,17 @@ export function RoomView({ eventId }: { eventId?: string }) {
   const permissions = useRoomPermissions(creators, powerLevels);
   const canMessage = permissions.event(EventType.RoomMessage, mx.getSafeUserId());
 
+  // Корзинка только когда всё выбранное удаляемо; переслать можно и чужое.
+  const myUserId = mx.getSafeUserId();
+  const canRedact = permissions.action('redact', myUserId);
+  const canDeleteOwn = permissions.event(EventType.RoomRedaction, myUserId);
+  const canDeleteSelected =
+    selected.length > 0 &&
+    selected.every(
+      (evt) =>
+        !evt.isRedacted() && (canRedact || (canDeleteOwn && evt.getSender() === myUserId))
+    );
+
   useKeyDown(
     window,
     useCallback(
@@ -217,6 +228,7 @@ export function RoomView({ eventId }: { eventId?: string }) {
             room={room}
             deleting={deleting}
             deleteError={deleteError}
+            canDelete={canDeleteSelected}
             onDelete={handleDeleteSelected}
             onForward={handleForwardSelected}
           />

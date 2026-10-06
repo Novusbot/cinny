@@ -11,6 +11,8 @@ type MessageSelectionBarProps = {
   onForward: () => void;
   deleting: boolean;
   deleteError?: string | undefined;
+  /** true — всё выбранное удаляемо, показываем корзинку; иначе только пересылка. */
+  canDelete: boolean;
 };
 
 /**
@@ -24,6 +26,7 @@ export function MessageSelectionBar({
   onForward,
   deleting,
   deleteError,
+  canDelete,
 }: MessageSelectionBarProps) {
   const { selected, clear } = useMessageSelection(room.roomId);
   const [promptOpen, setPromptOpen] = useState(false);
@@ -62,20 +65,22 @@ export function MessageSelectionBar({
           </IconButton>
         </Box>
         <Box shrink="No">
-          <IconButton
-            size="400"
-            radii="Pill"
-            fill="None"
-            variant="Critical"
-            onClick={() => setPromptOpen(true)}
-            aria-label="Удалить выбранные"
-          >
-            {deleting ? (
-              <Spinner size="200" variant="Critical" />
-            ) : (
-              <Icon size="400" src={Icons.Delete} />
-            )}
-          </IconButton>
+          {canDelete && (
+            <IconButton
+              size="400"
+              radii="Pill"
+              fill="None"
+              variant="Critical"
+              onClick={() => setPromptOpen(true)}
+              aria-label="Удалить выбранные"
+            >
+              {deleting ? (
+                <Spinner size="200" variant="Critical" />
+              ) : (
+                <Icon size="400" src={Icons.Delete} />
+              )}
+            </IconButton>
+          )}
         </Box>
         <Box grow="Yes" justifyContent="Center">
           <Text size="T300" truncate>
